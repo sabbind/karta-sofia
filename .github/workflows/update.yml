@@ -41,7 +41,7 @@ jobs:
           echo "Пълно обхождане: $FULL"
 
       - name: НАГ – разрешения за строеж и удостоверения за въвеждане в експлоатация
-        run: python agent/harvest_nag.py ${{ steps.mode.outputs.full == 'true' && '--full' || '' }} --details 8000
+        run: python agent/harvest_nag.py ${{ steps.mode.outputs.full == 'true' && '--full' || '' }} --minutes 230
 
       - name: ДНСК – разрешения за ползване
         run: |

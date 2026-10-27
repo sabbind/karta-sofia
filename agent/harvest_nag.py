@@ -115,14 +115,18 @@ def parse_permit_refs(page_html):
     return refs
 
 
-def fetch_uve_details(limit):
+def fetch_uve_details(limit, minutes):
+    import time
     db = load_jsonl(REGISTERS["uve"]["file"])
     todo = [k for k, r in db.items() if not r.get("details_checked")]
     todo.sort(key=lambda k: db[k].get("date") or "", reverse=True)  # първо най-новите
-    print(f"uve details: {len(todo)} pending, fetching up to {limit}", flush=True)
-    done = 0
+    print(f"uve details: {len(todo)} pending, fetching up to {limit} or {minutes} min", flush=True)
+    done, stop_at = 0, time.time() + minutes * 60
     try:
         for k in todo[:limit]:
+            if time.time() > stop_at:
+                print("  time budget reached", flush=True)
+                break
             r = db[k]
             page = http(r["url"], delay=0.7).decode("utf-8", "replace")
             r["permit_ref"] = parse_permit_refs(page)
@@ -139,10 +143,11 @@ def fetch_uve_details(limit):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--full", action="store_true")
-    ap.add_argument("--details", type=int, default=3000)
+    ap.add_argument("--details", type=int, default=100000, help="максимален брой страници с детайли")
+    ap.add_argument("--minutes", type=float, default=240, help="времеви лимит за детайлите (минути)")
     ap.add_argument("--only", choices=["rs", "uve"])
     a = ap.parse_args()
     for kind in (["rs", "uve"] if not a.only else [a.only]):
         harvest(kind, a.full)
     if a.only in (None, "uve") and a.details > 0:
-        fetch_uve_details(a.details)
+        fetch_uve_details(a.details, a.minutes)
