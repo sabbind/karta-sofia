@@ -2,11 +2,11 @@ name: Обновяване на регистрите
 
 on:
   schedule:
-    - cron: "17 2 * * *"        # всяка нощ ~05:17 българско време
+    - cron: "17 2 * * 1,4"      # понеделник и четвъртък, ~05:17 българско време
   workflow_dispatch:
     inputs:
       full:
-        description: "Пълно обхождане на регистрите (обновява и статусите на старите записи)"
+        description: "Пълно обхождане на регистрите (само при нужда – обновява статусите на старите записи)"
         type: boolean
         default: false
 
@@ -35,12 +35,13 @@ jobs:
         id: mode
         run: |
           FULL=false
-          if [ "${{ github.event.inputs.full }}" = "true" ] || [ "$(date +%u)" = "7" ] || [ ! -f data/nag_rs.jsonl ]; then FULL=true; fi
+          # пълно обхождане само при първото пускане или ако е поискано ръчно
+          if [ "${{ github.event.inputs.full }}" = "true" ] || [ ! -f data/nag_rs.jsonl ]; then FULL=true; fi
           echo "full=$FULL" >> "$GITHUB_OUTPUT"
           echo "Пълно обхождане: $FULL"
 
       - name: НАГ – разрешения за строеж и удостоверения за въвеждане в експлоатация
-        run: python agent/harvest_nag.py ${{ steps.mode.outputs.full == 'true' && '--full' || '' }} --details 4000
+        run: python agent/harvest_nag.py ${{ steps.mode.outputs.full == 'true' && '--full' || '' }} --details 8000
 
       - name: ДНСК – разрешения за ползване
         run: |

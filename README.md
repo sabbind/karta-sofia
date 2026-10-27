@@ -11,8 +11,10 @@
 
 ## Как работи
 
-Всяка нощ GitHub Actions (`.github/workflows/update.yml`):
-1. `agent/harvest_nag.py`, `agent/harvest_dnsk.py` – теглят новите записи (в неделя – целите регистри);
+Два пъти седмично (понеделник и четвъртък) GitHub Actions (`.github/workflows/update.yml`):
+1. `agent/harvest_nag.py`, `agent/harvest_dnsk.py` – теглят само новите записи (НАГ – докато стигне до вече известни;
+   ДНСК – текущата и предходната година). Целите регистри се минават само при първото пускане или ръчно
+   (Actions → Run workflow → „Пълно обхождане“);
 2. `agent/link.py` – свързва ги със сградите/имотите: по идентификатор, по квартал + УПИ (+ планоснимачен №),
    УВЕ ↔ РС по линка в НАГ, и ръчно от `data/manual_links.csv`;
 3. записва `site/idx/docs/*.json` и `site/idx/status.json` и публикува `site/` в Cloudflare Pages;
