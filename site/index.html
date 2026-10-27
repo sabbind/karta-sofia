@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="bg">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Сградите на София</title>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/pmtiles@3.2.1/dist/pmtiles.js"></script>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1d232b; --muted: #5f6b7a; --line: #dfe3e8; --accent: #1f5fae;
+    --shadow: 0 6px 24px rgba(20, 30, 45, .14);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--fg); background: #eef0f2; }
+  #map { position: absolute; inset: 0; }
+  .card { position: absolute; background: var(--bg); border-radius: 10px; box-shadow: var(--shadow); }
+  #title { top: 12px; left: 12px; padding: 10px 14px; max-width: calc(100% - 24px); }
+  #title h1 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: .1px; }
+  #title p { margin: 2px 0 0; color: var(--muted); font-size: 12.5px; }
+  #title { width: 380px; }
+  #search { position: relative; margin-top: 10px; }
+  #q { width: 100%; padding: 8px 32px 8px 10px; font: inherit; color: var(--fg); background: #f6f7f9; border: 1px solid var(--line); border-radius: 7px; }
+  #q:focus { outline: 2px solid var(--accent); outline-offset: -1px; background: var(--bg); }
+  #q::-webkit-search-cancel-button { display: none; }
+  #q-clear { position: absolute; right: 4px; top: 4px; width: 26px; height: 26px; border: 0; background: none; color: var(--muted); font-size: 18px; cursor: pointer; }
+  #results { list-style: none; margin: 6px 0 0; padding: 0; max-height: 50vh; overflow: auto; }
+  #results:empty { display: none; }
+  #results li { padding: 7px 8px; border-radius: 6px; cursor: pointer; display: flex; justify-content: space-between; gap: 10px; }
+  #results li[aria-selected="true"], #results li:hover { background: #eaf1fb; }
+  #results .r { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  #results .none { color: var(--muted); cursor: default; background: none !important; }
+  #results .kind { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .4px; margin-right: 6px; }
+  #results .id { font-family: ui-monospace, Menlo, Consolas, monospace; }
+  #legend { bottom: 28px; left: 12px; padding: 10px 12px; font-size: 12.5px; }
+  #legend .row { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
+  #legend .sw { width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(0,0,0,.18); flex: none; }
+  #legend summary { cursor: pointer; font-weight: 600; list-style: none; }
+  #legend summary::-webkit-details-marker { display: none; }
+  #panel { top: 12px; right: 12px; width: 340px; max-width: calc(100% - 24px); max-height: calc(100% - 24px); overflow: auto; padding: 14px 16px; display: none; }
+  #panel.open { display: block; }
+  #panel h2 { margin: 0 28px 2px 0; font-size: 15px; }
+  #panel .sub { color: var(--muted); margin-bottom: 10px; }
+  #panel dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; }
+  #panel dt { color: var(--muted); }
+  #panel dd { margin: 0; font-variant-numeric: tabular-nums; }
+  #panel .id { font-family: ui-monospace, Menlo, Consolas, monospace; }
+  #panel .permits { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 13px; }
+  #panel .permits h3 { margin: 0 0 6px; font-size: 13px; font-weight: 650; }
+  #panel .permits .empty { color: var(--muted); }
+  .doc { display: grid; grid-template-columns: 10px 1fr; gap: 0 9px; padding: 7px 0; border-top: 1px dashed var(--line); }
+  .doc:first-of-type { border-top: 0; }
+  .doc .dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 4px; }
+  .doc .t { font-weight: 600; }
+  .doc .m { color: var(--muted); font-size: 12.5px; }
+  .doc .o { margin-top: 2px; }
+  .doc a { color: var(--accent); }
+  .doc.cancelled .t, .doc.cancelled .o { text-decoration: line-through; color: var(--muted); }
+  #legend .mode { display: flex; gap: 4px; margin: 6px 0 8px; }
+  #legend .mode label { flex: 1; text-align: center; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; font-size: 12px; }
+  #legend .mode input { position: absolute; opacity: 0; }
+  #legend .mode input:checked + span { font-weight: 650; }
+  #legend .mode label:has(input:checked) { background: #eaf1fb; border-color: var(--accent); }
+  #legend .mode label:has(input:focus-visible) { outline: 2px solid var(--accent); }
+  #panel .close { position: absolute; top: 8px; right: 10px; border: 0; background: none; font-size: 20px; cursor: pointer; color: var(--muted); }
+  #panel .hint { color: var(--muted); font-size: 12.5px; margin-top: 8px; }
+  #msg { top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 16px 18px; max-width: 420px; display: none; }
+  #msg.show { display: block; }
+  @media (max-width: 600px) {
+    #panel { top: auto; bottom: 12px; right: 12px; left: 12px; width: auto; max-height: 50%; }
+    #legend { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div id="title" class="card">
+  <h1>Сградите на София</h1>
+  <p>Сгради и имоти (АГКК) с разрешенията за строеж и въвеждането им в експлоатация (НАГ, ДНСК)</p>
+  <div id="search" role="search">
+    <input id="q" type="search" autocomplete="off" spellcheck="false"
+           placeholder="Адрес, обект или идентификатор" aria-label="Търсене по адрес или идентификатор"
+           aria-controls="results">
+    <button id="q-clear" type="button" aria-label="Изчисти" hidden>×</button>
+    <ul id="results" role="listbox"></ul>
+  </div>
+</div>
+
+<details id="legend" class="card" open>
+  <summary>Легенда</summary>
+  <div class="mode" role="radiogroup" aria-label="Оцветяване">
+    <label><input type="radio" name="mode" id="mode-permits" value="permits" checked><span>Разрешения</span></label>
+    <label><input type="radio" name="mode" id="mode-use" value="use"><span>Предназначение</span></label>
+  </div>
+  <div id="legend-rows"></div>
+</details>
+
+<aside id="panel" class="card" aria-live="polite">
+  <button class="close" aria-label="Затвори" onclick="closePanel()">×</button>
+  <div id="panel-body"></div>
+</aside>
+
+<div id="msg" class="card"></div>
+
+<script>
+// ===================== НАСТРОЙКИ =====================
+// Публичният адрес на файла sofia-buildings.pmtiles в Cloudflare R2.
+const PMTILES_URL = "https://pub-662e3fbacec944c7a008b91db19878d9.r2.dev/sofia-map.pmtiles";
+// Основна карта (OpenStreetMap чрез OpenFreeMap, безплатно).
+const BASEMAP_STYLE = "https://tiles.openfreemap.org/styles/positron";
+// =====================================================
+
+const GROUPS = [
+  { name: "Жилищни", color: "#e0a458", codes: [100, 110, 130, 140, 190] },
+  { name: "Жилищни със смесено предназначение", color: "#d3743b", codes: [120, 490] },
+  { name: "Хотели и общежития", color: "#c99bd1", codes: [150, 160, 170, 310] },
+  { name: "Обществени (образование, здраве, култура…)", color: "#5b8fd1", codes: [230, 240, 250, 260, 270, 280, 290, 340, 350, 360] },
+  { name: "Търговия, офиси, услуги, транспорт", color: "#4fa59a", codes: [200, 210, 220, 300, 320, 330] },
+  { name: "Производство, складове, инфраструктура", color: "#8e8a99", codes: [400, 410, 420, 430, 440, 450, 460, 470, 480] },
+  { name: "Гаражи и допълващо застрояване", color: "#c4bfb5", codes: [180, 475] },
+];
+const OTHER_COLOR = "#b8b8b8";
+
+const colorExpr = ["match", ["get", "fc"]];
+GROUPS.forEach(g => colorExpr.push(g.codes, g.color));
+colorExpr.push(OTHER_COLOR);
+
+const STAGES = [
+  { st: 2, name: "Въведена в експлоатация", color: "#2f9e5b" },
+  { st: 1, name: "С разрешение за строеж", color: "#e8892b" },
+  { st: 0, name: "Без документи в регистрите", color: "#d5d8dd" },
+];
+const stageExpr = ["match", ["coalesce", ["feature-state", "st"], 0], 2, STAGES[0].color, 1, STAGES[1].color, STAGES[2].color];
+const DOC_TYPES = {
+  "nag-rs": { name: "Разрешение за строеж", color: STAGES[1].color },
+  "nag-uve": { name: "Удостоверение за въвеждане в експлоатация", color: STAGES[0].color },
+  "dnsk-rp": { name: "Разрешение за ползване (ДНСК)", color: STAGES[0].color },
+};
+const HOW = { kvupi: "свързано по квартал и УПИ", rs: "място по разрешението за строеж", uve: "място по удостоверението",
+              manual: "свързано ръчно" };
+let mode = "permits";
+
+function renderLegend() {
+  const rows = mode === "permits"
+    ? STAGES.map(s => `<div class="row"><span class="sw" style="background:${s.color}"></span>${s.name}</div>`).join("")
+      + `<div class="row" style="margin-top:4px"><span class="sw" style="background:${STAGES[1].color}44"></span>Имот с документи (при приближаване)</div>`
+    : GROUPS.map(g => `<div class="row"><span class="sw" style="background:${g.color}"></span>${g.name}</div>`).join("");
+  document.getElementById("legend-rows").innerHTML = rows;
+}
+renderLegend();
+
+function applyMode() {
+  if (!map.getLayer("buildings-fill")) return;
+  map.setPaintProperty("buildings-fill", "fill-color",
+    ["case", ["boolean", ["feature-state", "selected"], false], "#1f5fae", mode === "permits" ? stageExpr : colorExpr]);
+  map.setPaintProperty("parcels-fill", "fill-opacity",
+    ["case", ["boolean", ["feature-state", "selected"], false], 0.18,
+      mode === "permits" ? ["case", [">", ["coalesce", ["feature-state", "st"], 0], 0], 0.22, 0] : 0]);
+  map.setPaintProperty("parcels-fill", "fill-color",
+    ["case", ["boolean", ["feature-state", "selected"], false], "#1f5fae", stageExpr]);
+  renderLegend();
+}
+document.querySelectorAll('input[name="mode"]').forEach(r => r.addEventListener("change", e => { mode = e.target.value; applyMode(); }));
+
+const protocol = new pmtiles.Protocol();
+maplibregl.addProtocol("pmtiles", protocol.tile);
+
+const map = new maplibregl.Map({
+  container: "map",
+  style: BASEMAP_STYLE,
+  center: [23.3219, 42.6977],
+  zoom: 14,
+  minZoom: 10,
+  maxZoom: 20,
+  hash: true,
+  attributionControl: { compact: true },
+});
+map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), "bottom-right");
+map.addControl(new maplibregl.GeolocateControl({}), "bottom-right");
+map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
+
+function showMsg(html) { const m = document.getElementById("msg"); m.innerHTML = html; m.classList.add("show"); }
+
+map.on("load", () => {
+  // слоевете ни стоят под надписите на основната карта
+  const firstSymbol = map.getStyle().layers.find(l => l.type === "symbol")?.id;
+
+  map.addSource("cad", {
+    type: "vector",
+    url: "pmtiles://" + PMTILES_URL,
+    promoteId: "id",
+    attribution: "Сгради и имоти: © <a href=\"https://www.cadastre.bg\" target=\"_blank\">АГКК</a> · Търсене по адрес: <a href=\"https://photon.komoot.io\" target=\"_blank\">Photon</a>",
+  });
+
+  // поземлени имоти: невидим пълнеж (за клик) + граници
+  map.addLayer({
+    id: "parcels-fill", type: "fill", source: "cad", "source-layer": "parcels", minzoom: 14,
+    paint: {
+      "fill-color": "#1f5fae",
+      "fill-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.18, 0],
+    },
+  }, firstSymbol);
+  map.addLayer({
+    id: "parcels-line", type: "line", source: "cad", "source-layer": "parcels", minzoom: 15,
+    paint: {
+      "line-color": ["case", ["boolean", ["feature-state", "selected"], false], "#1f5fae", "#7a6f9b"],
+      "line-width": ["case", ["boolean", ["feature-state", "selected"], false], 2.5,
+        ["interpolate", ["linear"], ["zoom"], 15, 0.4, 18, 1.2]],
+      "line-dasharray": [3, 2],
+      "line-opacity": 0.8,
+    },
+  }, firstSymbol);
+
+  // сгради
+  map.addLayer({
+    id: "buildings-fill", type: "fill", source: "cad", "source-layer": "buildings",
+    paint: {
+      "fill-color": ["case", ["boolean", ["feature-state", "selected"], false], "#1f5fae", colorExpr],
+      "fill-opacity": ["interpolate", ["linear"], ["zoom"], 12, 0.75, 16, 0.85],
+    },
+  }, firstSymbol);
+  map.addLayer({
+    id: "buildings-line", type: "line", source: "cad", "source-layer": "buildings", minzoom: 15,
+    paint: { "line-color": "#4d4a45", "line-width": ["interpolate", ["linear"], ["zoom"], 15, 0.2, 18, 0.8], "line-opacity": 0.6 },
+  }, firstSymbol);
+  map.addLayer({
+    id: "buildings-hover", type: "line", source: "cad", "source-layer": "buildings",
+    paint: { "line-color": "#1d232b", "line-width": ["case", ["boolean", ["feature-state", "hover"], false], 2, 0] },
+  }, firstSymbol);
+
+  applyMode();
+  // етап на всяка сграда/имот (от агента) -> feature-state "st"
+  fetch("idx/status.json").then(r => r.ok ? r.json() : null).then(st => {
+    if (!st) return;
+    for (const [id, v] of Object.entries(st.b || {})) map.setFeatureState(ref("buildings", id), { st: v });
+    for (const [id, v] of Object.entries(st.p || {})) map.setFeatureState(ref("parcels", id), { st: v });
+  }).catch(() => {});
+
+  // проверка дали файлът се зарежда (напр. грешен адрес или CORS)
+  new pmtiles.PMTiles(PMTILES_URL).getHeader().catch(err => {
+    showMsg(`<b>Данните не се зареждат.</b><br>Проверете адреса на файла (PMTILES_URL) и CORS настройката на R2.<br><small>${err}</small>`);
+  });
+});
+
+let hoverId = null, selected = null;
+const ref = (layer, id) => ({ source: "cad", sourceLayer: layer, id });
+
+map.on("mousemove", e => {
+  const f = map.queryRenderedFeatures(e.point, { layers: ["buildings-fill"] })[0];
+  const p = f ? null : map.queryRenderedFeatures(e.point, { layers: ["parcels-fill"] })[0];
+  map.getCanvas().style.cursor = f || p ? "pointer" : "";
+  const id = f ? f.id : null;
+  if (hoverId !== null && hoverId !== id) map.setFeatureState(ref("buildings", hoverId), { hover: false });
+  hoverId = id;
+  if (id !== null) map.setFeatureState(ref("buildings", id), { hover: true });
+});
+
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]));
+const fmt = n => Number(n).toLocaleString("bg-BG", { maximumFractionDigits: 1 });
+const row = (k, v) => `<dt>${k}</dt><dd>${v === undefined || v === "" || v === null ? "—" : v}</dd>`;
+
+function select(layer, id) {
+  if (selected) map.setFeatureState(ref(selected.layer, selected.id), { selected: false });
+  selected = { layer, id };
+  map.setFeatureState(ref(layer, id), { selected: true });
+}
+
+function buildingHtml(p) {
+  const detailed = p.type !== undefined;
+  let h = `<h2>${esc(p.type || "Сграда")}</h2>`;
+  if (p.addr) h += `<div class="sub">${esc(p.addr)}</div>`;
+  h += `<dl>${row("Идентификатор", `<span class="id">${esc(p.id)}</span>`)}${row("Етажи", p.fl || undefined)}`;
+  if (detailed) h += row("Самост. обекти", p.units || undefined) + row("Застроена площ", p.area ? fmt(p.area) + " м²" : undefined);
+  h += row("Поземлен имот", `<span class="id">${esc(p.id.split(".").slice(0, 3).join("."))}</span>`);
+  h += `</dl>`;
+  if (!detailed) h += `<div class="hint">Приближете картата, за да видите адреса и подробностите.</div>`;
+  return h;
+}
+
+function parcelHtml(p) {
+  let h = `<h2>Поземлен имот</h2>`;
+  if (p.addr) h += `<div class="sub">${esc(p.addr)}</div>`;
+  h += `<dl>${row("Идентификатор", `<span class="id">${esc(p.id)}</span>`)}
+    ${row("Начин на трайно ползване", esc(p.use))}
+    ${row("Площ", p.area ? fmt(p.area) + " м²" : undefined)}
+    ${row("Квартал", esc(p.kv))}
+    ${row("УПИ", esc(p.upi))}</dl>`;
+  return h;
+}
+
+const docCache = {};
+function loadDocs(reg) {
+  if (!docCache[reg]) docCache[reg] = fetch(`idx/docs/${reg}.json`).then(r => r.ok ? r.json() : {}).catch(() => ({}));
+  return docCache[reg];
+}
+
+function docHtml(d) {
+  const [src, number, date, status, issuer, object, url, how] = d;
+  const t = DOC_TYPES[src] || { name: src, color: "#999" };
+  const cancelled = /отмен/i.test(status || "");
+  const dt = date ? date.split("-").reverse().join(".") : "";
+  return `<div class="doc${cancelled ? " cancelled" : ""}">
+    <span class="dot" style="background:${t.color}"></span>
+    <div><div class="t">${esc(t.name)} № ${esc(number)}</div>
+    <div class="m">${esc([dt, issuer, status].filter(Boolean).join(" · "))}${HOW[how] ? " · " + esc(HOW[how]) : ""}</div>
+    <div class="o">${esc(object)}</div>
+    ${url ? `<div class="m"><a href="${esc(url)}" target="_blank" rel="noopener">${src === "dnsk-rp" ? "PDF на документа" : "Документът в регистъра на НАГ"} ↗</a></div>` : ""}</div></div>`;
+}
+
+async function showDocs(layer, id, token) {
+  const p = id.split(".");
+  const items = await loadDocs(p[1]);
+  if (token !== panelToken) return;
+  const parcelRest = p[2];
+  let list = [];
+  if (layer === "buildings") list = [...(items[p.slice(2).join(".")] || []), ...(items[parcelRest] || [])];
+  else for (const [rest, docs] of Object.entries(items)) if (rest === parcelRest || rest.startsWith(parcelRest + ".")) list.push(...docs);
+  const seen = new Set();
+  list = list.filter(d => { const k = d[0] + d[1]; if (seen.has(k)) return false; seen.add(k); return true; })
+             .sort((a, b) => (b[2] || "").localeCompare(a[2] || ""));
+  const box = document.getElementById("permits");
+  if (!box) return;
+  box.innerHTML = list.length
+    ? `<h3>Документи (${list.length})</h3>` + list.map(docHtml).join("")
+    : `<span class="empty">Няма свързани документи от регистрите на НАГ и ДНСК.</span>`;
+}
+
+let panelToken = 0;
+function openFeature(layer, f) {
+  select(layer, f.id);
+  let html = layer === "buildings" ? buildingHtml(f.properties) : parcelHtml(f.properties);
+  html += `<div class="permits" id="permits"><span class="empty">Зареждане на документите…</span></div>`;
+  document.getElementById("panel-body").innerHTML = html;
+  document.getElementById("panel").classList.add("open");
+  showDocs(layer, String(f.id), ++panelToken);
+}
+
+map.on("click", e => {
+  const b = map.queryRenderedFeatures(e.point, { layers: ["buildings-fill"] })[0];
+  const p = b ? null : map.queryRenderedFeatures(e.point, { layers: ["parcels-fill"] })[0];
+  if (b) openFeature("buildings", b); else if (p) openFeature("parcels", p);
+});
+
+// ===================== ТЪРСЕНЕ =====================
+const qEl = document.getElementById("q"), resEl = document.getElementById("results"), clearEl = document.getElementById("q-clear");
+const ID_RE = /^(?:68134\.)?(\d+)\.(\d+(?:\.\d+){0,3})$/;
+const PREFIX_RE = /^(ул|бул|пл|жк|ж к|кв|м|вз|в з) /;  // след norm() точките са интервали
+const norm = s => s.toLowerCase().replace(/["„“”']/g, "").replace(/[.,\-–]/g, " ").replace(/\s+/g, " ").trim();
+let results = [], active = -1;
+
+// Търсене по адрес: OpenStreetMap чрез Photon (photon.komoot.io), ограничено до София
+const SOFIA_BBOX = "23.17,42.55,23.62,42.87";
+let osmAbort = null;
+async function searchOsm(q) {
+  if (osmAbort) osmAbort.abort();
+  osmAbort = new AbortController();
+  const url = `https://photon.komoot.io/api/?lang=default&limit=10&bbox=${SOFIA_BBOX}&lat=42.6977&lon=23.3219&q=${encodeURIComponent(q)}`;
+  const j = await fetch(url, { signal: osmAbort.signal }).then(r => r.json());
+  const seen = new Set(), out = [];
+  for (const f of j.features) {
+    const p = f.properties;
+    const addr = [p.street, p.housenumber].filter(Boolean).join(" ");
+    const isStreet = p.type === "street";
+    const label = isStreet ? p.name : (p.name && p.name !== p.street ? p.name : addr || p.name);
+    if (!label) continue;
+    const sub = [p.name && p.name !== p.street && !isStreet ? addr : "", p.district || p.suburb || p.locality || ""].filter(Boolean).join(", ");
+    const key = label + "|" + sub;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const [lon, lat] = f.geometry.coordinates;
+    out.push({ type: "addr", label, region: sub, street: isStreet, lon, lat,
+               bb: p.extent ? [p.extent[0], p.extent[3], p.extent[2], p.extent[1]] : null });
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
+async function searchId(q) {
+  const m = q.replace(/\s/g, "").match(ID_RE);
+  const reg = m[1], typed = m[2];
+  let idx;
+  try { idx = await fetch(`idx/id/${reg}.json`).then(r => { if (!r.ok) throw new Error(); return r.json(); }); }
+  catch { return [{ type: "none", label: `Няма кадастрален район ${reg} в гр. София` }]; }
+  const mk = (rest, v) => ({ type: "id", id: `68134.${reg}.${rest}`, layer: v[1] === "b" ? "buildings" : "parcels", bb: v[0] });
+  const out = [];
+  let key = typed;
+  if (!idx[key] && key.split(".").length === 3) key = key.split(".").slice(0, 2).join(".");  // самостоятелен обект → сградата
+  if (idx[key]) out.push(mk(key, idx[key]));
+  for (const [rest, v] of Object.entries(idx)) {  // подсказки: започващи с въведеното
+    if (out.length >= 10) break;
+    if (rest !== key && rest.startsWith(typed + ".")) out.push(mk(rest, v));
+  }
+  return out.length ? out : [{ type: "none", label: `Няма идентификатор 68134.${reg}.${typed}` }];
+}
+
+function render() {
+  resEl.innerHTML = results.map((r, i) => r.type === "none"
+    ? `<li class="none">${esc(r.label)}</li>`
+    : r.type === "id"
+      ? `<li role="option" data-i="${i}" aria-selected="${i === active}"><span><span class="kind">${r.layer === "buildings" ? "сграда" : "имот"}</span><span class="id">${esc(r.id)}</span></span></li>`
+      : `<li role="option" data-i="${i}" aria-selected="${i === active}"><span>${r.street ? '<span class="kind">улица</span>' : ""}${esc(r.label)}</span><span class="r">${esc(r.region)}</span></li>`
+  ).join("");
+}
+
+let seq = 0;
+async function runSearch() {
+  const q = qEl.value.trim();
+  clearEl.hidden = !q;
+  const my = ++seq;
+  if (q.length < 2) { results = []; render(); return; }
+  let res;
+  if (ID_RE.test(q.replace(/\s/g, ""))) res = await searchId(q);
+  else {
+    try { res = await searchOsm(q); } catch (e) { if (e.name === "AbortError") return; res = [{ type: "none", label: "Търсенето по адрес не е достъпно в момента" }]; }
+    if (!res.length) res = [{ type: "none", label: "Няма намерен адрес" }];
+  }
+  if (my !== seq) return;
+  results = res; active = res[0] && res[0].type !== "none" ? 0 : -1; render();
+}
+
+function choose(r) {
+  if (!r || r.type === "none") return;
+  resEl.innerHTML = ""; qEl.blur();
+  if (r.type === "addr" && (r.street || !r.bb)) {
+    if (r.bb) map.fitBounds([[r.bb[0], r.bb[1]], [r.bb[2], r.bb[3]]], { padding: 80, maxZoom: 17, duration: 900 });
+    else map.flyTo({ center: [r.lon, r.lat], zoom: 18, duration: 900 });
+    if (r.street) return;
+  } else {
+    map.fitBounds([[r.bb[0], r.bb[1]], [r.bb[2], r.bb[3]]], { padding: 80, maxZoom: 18.5, duration: 900 });
+  }
+  const [x0, y0, x1, y1] = r.bb || [r.lon, r.lat, r.lon, r.lat];
+  map.once("idle", () => {
+    if (r.type === "id") {
+      const f = map.querySourceFeatures("cad", { sourceLayer: r.layer, filter: ["==", ["get", "id"], r.id] })
+        .sort((a, b) => Object.keys(b.properties).length - Object.keys(a.properties).length)[0];
+      if (f) openFeature(r.layer, f);
+    } else {  // адрес: сградата (или имотът) в точката от OpenStreetMap
+      const pt = r.bb && !r.street && r.lon !== undefined ? map.project([r.lon, r.lat]) : map.project([(x0 + x1) / 2, (y0 + y1) / 2]);
+      // точката от OSM често е на входа или до сградата: търсим в малък радиус около нея
+      const box = [[pt.x - 10, pt.y - 10], [pt.x + 10, pt.y + 10]];
+      const b = map.queryRenderedFeatures(pt, { layers: ["buildings-fill"] })[0]
+             || map.queryRenderedFeatures(box, { layers: ["buildings-fill"] })[0];
+      const p = b ? null : map.queryRenderedFeatures(pt, { layers: ["parcels-fill"] })[0];
+      if (b) openFeature("buildings", b); else if (p) openFeature("parcels", p);
+    }
+  });
+}
+
+let timer;
+qEl.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(runSearch, 300); });
+qEl.addEventListener("focus", () => { if (qEl.value.trim()) runSearch(); });
+qEl.addEventListener("keydown", e => {
+  const n = results.filter(r => r.type !== "none").length;
+  if (e.key === "ArrowDown" && n) { active = (active + 1) % n; render(); e.preventDefault(); }
+  else if (e.key === "ArrowUp" && n) { active = (active - 1 + n) % n; render(); e.preventDefault(); }
+  else if (e.key === "Enter") {
+    e.preventDefault();
+    if (resEl.children.length && active >= 0) choose(results[active]);
+    else { clearTimeout(timer); runSearch().then(() => choose(results[Math.max(active, 0)])); }
+  }
+  else if (e.key === "Escape") { resEl.innerHTML = ""; }
+});
+resEl.addEventListener("click", e => { const li = e.target.closest("li[data-i]"); if (li) choose(results[+li.dataset.i]); });
+clearEl.addEventListener("click", () => { qEl.value = ""; results = []; render(); clearEl.hidden = true; qEl.focus(); });
+
+function closePanel() {
+  document.getElementById("panel").classList.remove("open");
+  if (selected) map.setFeatureState(ref(selected.layer, selected.id), { selected: false });
+  selected = null;
+}
+</script>
+</body>
+</html>

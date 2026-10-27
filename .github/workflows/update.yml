@@ -1,0 +1,79 @@
+name: Обновяване на регистрите
+
+on:
+  schedule:
+    - cron: "17 2 * * *"        # всяка нощ ~05:17 българско време
+  workflow_dispatch:
+    inputs:
+      full:
+        description: "Пълно обхождане на регистрите (обновява и статусите на старите записи)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Тестове на разчитането
+        run: python tests/test_parse.py
+
+      - name: Режим
+        id: mode
+        run: |
+          FULL=false
+          if [ "${{ github.event.inputs.full }}" = "true" ] || [ "$(date +%u)" = "7" ] || [ ! -f data/nag_rs.jsonl ]; then FULL=true; fi
+          echo "full=$FULL" >> "$GITHUB_OUTPUT"
+          echo "Пълно обхождане: $FULL"
+
+      - name: НАГ – разрешения за строеж и удостоверения за въвеждане в експлоатация
+        run: python agent/harvest_nag.py ${{ steps.mode.outputs.full == 'true' && '--full' || '' }} --details 4000
+
+      - name: ДНСК – разрешения за ползване
+        run: |
+          if [ ! -f data/dnsk_rp.jsonl ] || [ "${{ steps.mode.outputs.full }}" = "true" ]; then
+            python agent/harvest_dnsk.py --all
+          else
+            python agent/harvest_dnsk.py
+          fi
+
+      - name: Свързване със сградите и имотите
+        run: python agent/link.py
+
+      - name: Записване на данните в хранилището
+        run: |
+          git config user.name "karta-sofia-agent"
+          git config user.email "actions@users.noreply.github.com"
+          git add data out site/idx/docs site/idx/status.json
+          if git diff --cached --quiet; then echo "Няма промени"; else
+            git commit -m "Обновяване на регистрите $(date +%F)"
+            git push
+          fi
+
+      - name: Публикуване в Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy site --project-name=karta-sofia --branch=main --commit-dirty=true
+
+      - name: Непривързани документи (за изтегляне)
+        uses: actions/upload-artifact@v4
+        with:
+          name: nesvarzani
+          path: |
+            out/nesvarzani.csv
+            out/report.json

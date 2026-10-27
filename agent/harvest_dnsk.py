@@ -1,0 +1,139 @@
+"""Изтегля публичния регистър на разрешенията за ползване на ДНСК (dnsk.bg), по години.
+-> data/dnsk_rp.jsonl
+
+Пази само записите на територията на Столична община.
+НЕ чете и НЕ пази колоните „Наименование ЮЛ/Имена ФЛ“ и „ЕГН/Булстат/ЕИК“.
+
+Usage:
+  python agent/harvest_dnsk.py              # текущата и предходната година
+  python agent/harvest_dnsk.py --all        # всички години (2000 – днес)
+"""
+import argparse
+import html
+import json
+import os
+import re
+import sys
+import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from common import http, load_jsonl, save_jsonl  # noqa: E402
+
+INDEX = "https://dnsk.bg/registri/publichen-registar-na-razresheniyata-za-polzvane-izdadeni-ot-dnsk/"
+
+# заглавие на колоната (нормализирано) -> наше поле; колоните с лични данни нарочно ги няма
+COLS = {
+    "№ на акта": "number",
+    "Разрешение за ползване": "pdf",
+    "Дата на акта": "date_raw",
+    "Административен орган": "issuer",
+    "Описание/ Наименование на обект": "object",
+    "Кадастрален идентификатор": "cad_id",
+    "УПИ": "upi",
+    "Местност": "place",
+    "Населено място Район (обект)": "settlement",
+    "Квартал": "kv",
+    "Област (обект)": "province",
+    "Тип": "doctype",
+    "Състояние": "status",
+    "Администрация": "administration",
+    "Община (обект)": "municipality",
+}
+SKIP = {"Наименование ЮЛ/ Имена ФЛ", "ЕГН/Булстат/ЕИК", "Вид на възложителя"}
+
+
+def clean(s):
+    s = html.unescape(re.sub(r"<br\s*/?>", " ", s or ""))
+    s = re.sub(r"<[^>]+>", " ", s)
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def norm_head(s):
+    return re.sub(r"\s+", " ", clean(s)).replace("/ ", "/ ").strip()
+
+
+def year_links():
+    page = http(INDEX, delay=2).decode("utf-8", "replace")
+    links = sorted(set(re.findall(re.escape(INDEX) + r"(\d{4})-g/", page)), reverse=True)
+    return [(int(y), f"{INDEX}{y}-g/") for y in links]
+
+
+def decode_js_string(s):
+    """Content of a JS single-quoted string literal -> Python str."""
+    s = s.replace("\\'", "'")
+    return json.loads('"' + s + '"')
+
+
+def parse_year_page(page):
+    m = re.search(r"<table id=\"tablepress-(\d+)\".*?<thead>(.*?)</thead>", page, re.S)
+    if not m:
+        raise ValueError("no tablepress table")
+    tid, thead = m.groups()
+    heads = [norm_head(h) for h in re.findall(r"<t[hd][^>]*>(.*?)</t[hd]>", thead, re.S)]
+    dm = re.search(r"DT_TP_data\['" + tid + r"'\]\s*=\s*JSON\.parse\('(.*?)'\);", page, re.S)
+    if dm:
+        rows = json.loads(decode_js_string(dm.group(1)))
+    else:  # малки таблици може да са само в HTML
+        body = page[m.end():page.index("</table>", m.end())]
+        rows = [re.findall(r"<td[^>]*>(.*?)</td>", tr, re.S) for tr in re.findall(r"<tr[^>]*>(.*?)</tr>", body, re.S)]
+    out = []
+    for row in rows:
+        rec = {}
+        for i, h in enumerate(heads):
+            if i >= len(row) or h in SKIP:
+                continue
+            field = COLS.get(h)
+            if not field:
+                continue
+            cell = row[i] or ""
+            if field == "pdf":
+                pm = re.search(r'href=\\?"([^"\\]+\.pdf)', cell)
+                rec["pdf"] = pm.group(1) if pm else None
+            else:
+                rec[field] = clean(cell)
+        out.append(rec)
+    return out, heads
+
+
+def is_sofia_municipality(r):
+    txt = " ".join(r.get(k) or "" for k in ("municipality", "settlement", "cad_id", "province"))
+    return bool(re.search(r"СТОЛИЧНА|68134\.", txt, re.I)) or (
+        (r.get("municipality") or "").strip().lower() in ("софия", "столична") )
+
+
+def to_date(raw):
+    m = re.match(r"(\d{1,2})\.(\d{1,2})\.(\d{4})", raw or "")
+    return f"{m.group(3)}-{int(m.group(2)):02d}-{int(m.group(1)):02d}" if m else None
+
+
+def harvest(all_years):
+    db = load_jsonl("dnsk_rp.jsonl")
+    years = year_links()
+    if not years:
+        raise SystemExit("no year links found on " + INDEX)
+    if not all_years:
+        years = years[:2]
+    for y, url in years:
+        t0 = time.time()
+        page = http(url, delay=3, timeout=180).decode("utf-8", "replace")
+        rows, heads = parse_year_page(page)
+        unknown = [h for h in heads if h and h not in COLS and h not in SKIP and h not in ("Виж инфо",)]
+        kept = 0
+        for r in rows:
+            if not r.get("number") or not is_sofia_municipality(r):
+                continue
+            key = "dnsk-rp:" + re.sub(r"\s+", "", r["number"])
+            r.update({"key": key, "src": "dnsk-rp", "year": y, "date": to_date(r.get("date_raw"))})
+            r.pop("date_raw", None)
+            db[key] = r
+            kept += 1
+        print(f"dnsk {y}: {len(rows)} rows, {kept} in Столична община ({time.time() - t0:.0f}s)"
+              + (f"; unknown columns: {unknown}" if unknown else ""), flush=True)
+    save_jsonl("dnsk_rp.jsonl", db)
+    print(f"dnsk: {len(db)} records", flush=True)
+
+
+if __name__ == "__main__":
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--all", action="store_true")
+    harvest(ap.parse_args().all)
