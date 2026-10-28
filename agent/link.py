@@ -194,6 +194,25 @@ def main():
                 links[rk] = (links[key][0], "uve")
                 notes.pop(rk, None)
 
+    # РС е само към имот, а неговото УВЕ сочи сграда в същия имот -> РС се закача и към тази сграда
+    for key, d in docs.items():
+        if d["src"] != "nag-uve" or key not in links:
+            continue
+        uve_buildings = [cid for kind, cid in links[key][0] if kind == "b"]
+        if not uve_buildings:
+            continue
+        for ref in d.get("permit_ref") or []:
+            rk = rs_by_hash.get(ref.get("hash"))
+            if not rk or rk not in links:
+                continue
+            targets, how = links[rk]
+            rs_parcels = {cid for kind, cid in targets if kind == "p"}
+            if any(kind == "b" for kind, _ in targets) or not rs_parcels:
+                continue
+            add = [("b", b) for b in uve_buildings if ".".join(b.split(".")[:3]) in rs_parcels]
+            if add:
+                links[rk] = (targets + add, how)
+
     # ---------------- outputs for the map
     per_reg = defaultdict(lambda: defaultdict(list))
     stage_b, stage_p = {}, {}

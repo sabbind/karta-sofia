@@ -65,10 +65,20 @@ def year_links():
     return [(int(y), f"{INDEX}{y}-g/") for y in links]
 
 
+_JS_ESC = re.compile(r"\\(u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|.)", re.S)
+_SIMPLE = {"n": "\n", "t": "\t", "r": "\r", "b": "\b", "f": "\f", "v": "\v", "0": "\0"}
+
+
 def decode_js_string(s):
-    """Content of a JS single-quoted string literal -> Python str."""
-    s = s.replace("\\'", "'")
-    return json.loads('"' + s + '"')
+    """Content of a JS single-quoted string literal -> Python str (обработва \\ \' \" \/ \uXXXX \xXX)."""
+    def rep(m):
+        e = m.group(1)
+        if e[0] == "u" and len(e) == 5:
+            return chr(int(e[1:], 16))
+        if e[0] == "x" and len(e) == 3:
+            return chr(int(e[1:], 16))
+        return _SIMPLE.get(e, e)
+    return _JS_ESC.sub(rep, s)
 
 
 def parse_year_page(page):

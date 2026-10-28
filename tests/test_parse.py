@@ -79,8 +79,13 @@ rows = [["", "ДНСК26-РП-527", '<a href="https://dnsk.bg/wp-content/uploads
          "68134.406.19. 2", "V - „ЗА АДМИНИСТРАТИВНА СГРАДА, НСИ”", "„ЛИЛЯНА ДИМИТРОВА”",
          "РАЙОН „ОБОРИЩЕ”, ГР. СОФИЯ, УЛ. „ПАНАЙОТ ВОЛОВ” №2", "535", "СОФИЯ", "София", "София", "ТАЙНО ИМЕ",
          "Разрешение за ползване", "Издаден", "ДНСК", "Физическо лице", "1234567890", "СОФИЯ", ""]]
-js_literal = json.dumps(json.dumps(rows, ensure_ascii=True))[1:-1].replace("'", "\\'")
-eq(decode_js_string(js_literal), json.dumps(rows, ensure_ascii=True))
+# както TablePress: JSON с \\uXXXX, вграден в JS низ с единични кавички (\\ -> \\\\, ' -> \\')
+json_text = json.dumps(rows, ensure_ascii=True).replace("/", "\\/")
+js_literal = json_text.replace("\\", "\\\\").replace("'", "\\'")
+eq(decode_js_string(js_literal), json_text)
+# реален откъс от dnsk.bg
+eq(json.loads(decode_js_string('[["","\\u0414\\u041d\\u0421\\u041a26-\\u0420\\u041f-532","\\u003Ca href=\\"https:\\/\\/dnsk.bg\\/x.pdf\\"\\u003EPDF\\u003C\\/a\\u003E"]]')),
+   [["", "ДНСК26-РП-532", '<a href="https://dnsk.bg/x.pdf">PDF</a>']])
 page = ('<table id="tablepress-44" class="tablepress"><thead><tr class="row-1">'
         '<th class="column-1">Виж <br />\nинфо</th><th class="column-2">№ <br />\nна акта</th><th class="column-3">Разрешение <br />\nза ползване</th>'
         '<th class="column-4">Дата <br />\nна акта</th><th class="column-5">Административен <br />\nорган</th><th class="column-6">Описание/<br />\nНаименование <br />\nна обект </th>'
