@@ -1,8 +1,29 @@
 {
- "documents": {},
- "skipped": {},
- "linked": {},
- "unlinked": {},
- "buildings_with_docs": 0,
- "parcels_with_docs": 0
+ "documents": {
+  "nag-rs": 85114,
+  "nag-uve": 28893,
+  "dnsk-rp": 599
+ },
+ "skipped": {
+  "извън гр. София": 22776
+ },
+ "linked": {
+  "dnsk-rp / id": 483,
+  "dnsk-rp / kvupi": 20,
+  "nag-rs / id": 15139,
+  "nag-rs / kvupi": 22615,
+  "nag-rs / uve": 230,
+  "nag-uve / id": 8704,
+  "nag-uve / kvupi": 8651,
+  "nag-uve / rs": 168
+ },
+ "unlinked": {
+  "nag-rs": 29771,
+  "nag-uve": 6079,
+  "dnsk-rp": 30
+ },
+ "unlinked_for_manual": 35147,
+ "waiting_for_cadastre_update": 733,
+ "buildings_with_docs": 6386,
+ "parcels_with_docs": 24394
 }
