@@ -1,0 +1,40 @@
+=== 2026-10-28 19:01:29 ДНСК ===
+dnsk 2026: ГРЕШКА JSONDecodeError: Extra data: line 1 column 5 (char 4)
+dnsk 2025: ГРЕШКА JSONDecodeError: Extra data: line 1 column 5 (char 4)
+dnsk 2024: ГРЕШКА JSONDecodeError: Extra data: line 1 column 5 (char 4)
+dnsk 2023: ГРЕШКА JSONDecodeError: Extra data: line 1 column 5 (char 4)
+dnsk 2022: ГРЕШКА JSONDecodeError: Extra data: line 1 column 5 (char 4)
+dnsk 2021: ГРЕШКА JSONDecodeError: Extra data: line 1 column 5 (char 4)
+dnsk 2020: ГРЕШКА JSONDecodeError: Extra data: line 1 column 5 (char 4)
+dnsk 2019: ГРЕШКА JSONDecodeError: Extra data: line 1 column 5 (char 4)
+dnsk 2018: ГРЕШКА JSONDecodeError: Extra data: line 1 column 5 (char 4)
+dnsk 2017: ГРЕШКА JSONDecodeError: Extra data: line 1 column 5 (char 4)
+dnsk 2016: ГРЕШКА JSONDecodeError: Extra data: line 1 column 5 (char 4)
+dnsk 2015: ГРЕШКА JSONDecodeError: Extra data: line 1 column 5 (char 4)
+dnsk 2014: ГРЕШКА JSONDecodeError: Extra data: line 1 column 5 (char 4)
+dnsk 2013: ГРЕШКА JSONDecodeError: Extra data: line 1 column 5 (char 4)
+dnsk 2012: ГРЕШКА JSONDecodeError: Extra data: line 1 column 5 (char 4)
+dnsk 2011: ГРЕШКА JSONDecodeError: Extra data: line 1 column 5 (char 4)
+dnsk 2010: ГРЕШКА JSONDecodeError: Extra data: line 1 column 5 (char 4)
+dnsk 2009: ГРЕШКА JSONDecodeError: Extra data: line 1 column 5 (char 4)
+dnsk 2008: ГРЕШКА JSONDecodeError: Extra data: line 1 column 5 (char 4)
+dnsk 2007: ГРЕШКА JSONDecodeError: Extra data: line 1 column 5 (char 4)
+dnsk 2006: ГРЕШКА JSONDecodeError: Extra data: line 1 column 5 (char 4)
+dnsk 2005: ГРЕШКА JSONDecodeError: Extra data: line 1 column 5 (char 4)
+dnsk 2004: ГРЕШКА JSONDecodeError: Extra data: line 1 column 5 (char 4)
+dnsk 2003: ГРЕШКА JSONDecodeError: Extra data: line 1 column 5 (char 4)
+dnsk 2002: ГРЕШКА JSONDecodeError: Extra data: line 1 column 5 (char 4)
+dnsk 2001: ГРЕШКА JSONDecodeError: Extra data: line 1 column 5 (char 4)
+dnsk 2000: ГРЕШКА JSONDecodeError: Extra data: line 1 column 5 (char 4)
+dnsk: 0 records, 27 years with errors
+dnsk: всички години са неуспешни
+=== 2026-10-28 19:02:51 Свързване ===
+documents 0 manual links 0
+{
+ "documents": {},
+ "skipped": {},
+ "linked": {},
+ "unlinked": {},
+ "buildings_with_docs": 0,
+ "parcels_with_docs": 0
+}
