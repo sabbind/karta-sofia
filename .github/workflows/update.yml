@@ -9,6 +9,11 @@ on:
         description: "Пълно обхождане на регистрите (само при нужда – обновява статусите на старите записи)"
         type: boolean
         default: false
+      only:
+        description: "Кои регистри"
+        type: choice
+        options: [всички, само НАГ, само ДНСК, само свързване]
+        default: всички
 
 permissions:
   contents: write
@@ -20,7 +25,7 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 300
+    timeout-minutes: 330
     steps:
       - uses: actions/checkout@v4
 
@@ -37,30 +42,49 @@ jobs:
           FULL=false
           # пълно обхождане само при първото пускане или ако е поискано ръчно
           if [ "${{ github.event.inputs.full }}" = "true" ] || [ ! -f data/nag_rs.jsonl ]; then FULL=true; fi
+          if [ "${{ github.event.inputs.only }}" = "само ДНСК" ] && [ ! -f data/dnsk_rp.jsonl ]; then FULL=true; fi
           echo "full=$FULL" >> "$GITHUB_OUTPUT"
           echo "Пълно обхождане: $FULL"
 
       - name: НАГ – разрешения за строеж и удостоверения за въвеждане в експлоатация
-        run: python agent/harvest_nag.py ${{ steps.mode.outputs.full == 'true' && '--full' || '' }} --minutes 230
+        if: ${{ !github.event.inputs.only || github.event.inputs.only == 'всички' || github.event.inputs.only == 'само НАГ' }}
+        continue-on-error: true
+        timeout-minutes: 245
+        run: |
+          set -o pipefail
+          mkdir -p out
+          echo "=== $(date -u '+%F %T') НАГ ===" >> out/run.log
+          python -u agent/harvest_nag.py ${{ steps.mode.outputs.full == 'true' && '--full' || '' }} --minutes 220 2>&1 | tee -a out/run.log
 
       - name: ДНСК – разрешения за ползване
+        if: ${{ !github.event.inputs.only || github.event.inputs.only == 'всички' || github.event.inputs.only == 'само ДНСК' }}
+        continue-on-error: true
+        timeout-minutes: 40
         run: |
-          if [ ! -f data/dnsk_rp.jsonl ] || [ "${{ steps.mode.outputs.full }}" = "true" ]; then
-            python agent/harvest_dnsk.py --all
-          else
-            python agent/harvest_dnsk.py
-          fi
+          set -o pipefail
+          mkdir -p out
+          echo "=== $(date -u '+%F %T') ДНСК ===" >> out/run.log
+          if [ ! -f data/dnsk_rp.jsonl ] || [ "${{ steps.mode.outputs.full }}" = "true" ]; then ARGS=--all; else ARGS=; fi
+          python -u agent/harvest_dnsk.py $ARGS 2>&1 | tee -a out/run.log
 
       - name: Свързване със сградите и имотите
-        run: python agent/link.py
+        continue-on-error: true
+        timeout-minutes: 15
+        run: |
+          set -o pipefail
+          echo "=== $(date -u '+%F %T') Свързване ===" >> out/run.log
+          python -u agent/link.py 2>&1 | tee -a out/run.log
 
       - name: Записване на данните в хранилището
+        if: always()
         run: |
+          tail -n 3000 out/run.log > out/run.tmp 2>/dev/null && mv out/run.tmp out/run.log || true
           git config user.name "karta-sofia-agent"
           git config user.email "actions@users.noreply.github.com"
-          git add data out site/idx/docs site/idx/status.json
+          git add -A data out site/idx || true
           if git diff --cached --quiet; then echo "Няма промени"; else
             git commit -m "Обновяване на регистрите $(date +%F)"
+            git pull --rebase origin main || true
             git push
           fi
 
@@ -72,9 +96,11 @@ jobs:
           command: pages deploy site --project-name=karta-sofia --branch=main --commit-dirty=true
 
       - name: Непривързани документи (за изтегляне)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: nesvarzani
           path: |
             out/nesvarzani.csv
             out/report.json
+            out/run.log

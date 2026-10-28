@@ -53,8 +53,15 @@ def norm_head(s):
 
 
 def year_links():
-    page = http(INDEX, delay=2).decode("utf-8", "replace")
-    links = sorted(set(re.findall(re.escape(INDEX) + r"(\d{4})-g/", page)), reverse=True)
+    try:
+        page = http(INDEX, delay=2).decode("utf-8", "replace")
+        links = sorted(set(re.findall(r"publichen-registar-na-razresheniyata-za-polzvane-izdadeni-ot-dnsk/(\d{4})-g/", page)),
+                       reverse=True)
+    except Exception as e:  # noqa: BLE001
+        print(f"dnsk index: ГРЕШКА {type(e).__name__}: {e}", flush=True)
+        links = []
+    if not links:  # резервно: годините по шаблона
+        links = [str(y) for y in range(time.gmtime().tm_year, 1999, -1)]
     return [(int(y), f"{INDEX}{y}-g/") for y in links]
 
 
@@ -113,10 +120,16 @@ def harvest(all_years):
         raise SystemExit("no year links found on " + INDEX)
     if not all_years:
         years = years[:2]
+    errors = 0
     for y, url in years:
         t0 = time.time()
-        page = http(url, delay=3, timeout=180).decode("utf-8", "replace")
-        rows, heads = parse_year_page(page)
+        try:
+            page = http(url, delay=3, timeout=180).decode("utf-8", "replace")
+            rows, heads = parse_year_page(page)
+        except Exception as e:  # noqa: BLE001
+            errors += 1
+            print(f"dnsk {y}: ГРЕШКА {type(e).__name__}: {e}", flush=True)
+            continue
         unknown = [h for h in heads if h and h not in COLS and h not in SKIP and h not in ("Виж инфо",)]
         kept = 0
         for r in rows:
@@ -129,8 +142,11 @@ def harvest(all_years):
             kept += 1
         print(f"dnsk {y}: {len(rows)} rows, {kept} in Столична община ({time.time() - t0:.0f}s)"
               + (f"; unknown columns: {unknown}" if unknown else ""), flush=True)
+        save_jsonl("dnsk_rp.jsonl", db)
     save_jsonl("dnsk_rp.jsonl", db)
-    print(f"dnsk: {len(db)} records", flush=True)
+    print(f"dnsk: {len(db)} records, {errors} years with errors", flush=True)
+    if errors == len(years):
+        raise SystemExit("dnsk: всички години са неуспешни")
 
 
 if __name__ == "__main__":
