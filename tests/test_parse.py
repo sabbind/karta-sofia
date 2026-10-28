@@ -83,9 +83,12 @@ rows = [["", "ДНСК26-РП-527", '<a href="https://dnsk.bg/wp-content/uploads
 json_text = json.dumps(rows, ensure_ascii=True).replace("/", "\\/")
 js_literal = json_text.replace("\\", "\\\\").replace("'", "\\'")
 eq(decode_js_string(js_literal), json_text)
-# реален откъс от dnsk.bg
-eq(json.loads(decode_js_string('[["","\\u0414\\u041d\\u0421\\u041a26-\\u0420\\u041f-532","\\u003Ca href=\\"https:\\/\\/dnsk.bg\\/x.pdf\\"\\u003EPDF\\u003C\\/a\\u003E"]]')),
-   [["", "ДНСК26-РП-532", '<a href="https://dnsk.bg/x.pdf">PDF</a>']])
+# като на dnsk.bg: JSON (\uXXXX, \/) вграден в JS низ, където и " са екранирани като \"
+real_rows = [["", "ДНСК26-РП-532", '<a href="https://dnsk.bg/x.pdf">PDF</a>']]
+real_json = json.dumps(real_rows, ensure_ascii=True, separators=(",", ":")).replace("/", "\\/")
+real_js = real_json.replace("\\", "\\\\").replace('"', '\\"').replace("'", "\\'")
+assert real_js.startswith('[[\\"\\",\\"\\\\u0414'), real_js[:30]
+eq(json.loads(decode_js_string(real_js)), real_rows)
 page = ('<table id="tablepress-44" class="tablepress"><thead><tr class="row-1">'
         '<th class="column-1">Виж <br />\nинфо</th><th class="column-2">№ <br />\nна акта</th><th class="column-3">Разрешение <br />\nза ползване</th>'
         '<th class="column-4">Дата <br />\nна акта</th><th class="column-5">Административен <br />\nорган</th><th class="column-6">Описание/<br />\nНаименование <br />\nна обект </th>'

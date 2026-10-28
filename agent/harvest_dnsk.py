@@ -70,7 +70,7 @@ _SIMPLE = {"n": "\n", "t": "\t", "r": "\r", "b": "\b", "f": "\f", "v": "\v", "0"
 
 
 def decode_js_string(s):
-    """Content of a JS single-quoted string literal -> Python str (обработва \\ \' \" \/ \uXXXX \xXX)."""
+    r"""Content of a JS single-quoted string literal -> Python str (handles \\ \' \" \/ \uXXXX \xXX)."""
     def rep(m):
         e = m.group(1)
         if e[0] == "u" and len(e) == 5:
