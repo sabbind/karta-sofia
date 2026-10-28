@@ -228,15 +228,20 @@ def main():
     src_name = {"nag-rs": "НАГ – РС", "nag-uve": "НАГ – УВЕ", "dnsk-rp": "ДНСК – РП"}
     unl = [k for k in notes]
     unl.sort(key=lambda k: (docs[k]["src"], docs[k].get("date") or ""), reverse=True)
-    with open(os.path.join(OUT, "nesvarzani.csv"), "w", encoding="utf-8-sig", newline="") as f:
-        w = csv.writer(f, delimiter=";")
-        w.writerow(cols)
-        for k in unl:
-            d = docs[k]
-            ids, district, kv, upi, place, addr, text = fields(d)
-            w.writerow([k, src_name[d["src"]], d.get("number"), d.get("date"), d.get("issuer"), district or "",
-                        (d.get("object") or "")[:300], place or "", kv or "", upi or "",
-                        (addr or d.get("scope") or "")[:300], notes[k], d.get("url") or d.get("pdf") or "", ""])
+    # документи с идентификатор, който още го няма в нашето копие на кадастъра (АГКК публикува на ~3 месеца):
+    # ще се свържат сами след следващото обновяване -> отделна таблица, не за ръчно свързване
+    waiting = [k for k in unl if notes[k].startswith("идентификатор(и) не са в кадастъра")]
+    manual_todo = [k for k in unl if k not in set(waiting)]
+    for fname, keys in (("nesvarzani.csv", manual_todo), ("chakat_kadastar.csv", waiting)):
+        with open(os.path.join(OUT, fname), "w", encoding="utf-8-sig", newline="") as f:
+            w = csv.writer(f, delimiter=";")
+            w.writerow(cols)
+            for k in keys:
+                d = docs[k]
+                ids, district, kv, upi, place, addr, text = fields(d)
+                w.writerow([k, src_name[d["src"]], d.get("number"), d.get("date"), d.get("issuer"), district or "",
+                            (d.get("object") or "")[:300], place or "", kv or "", upi or "",
+                            (addr or d.get("scope") or "")[:300], notes[k], d.get("url") or d.get("pdf") or "", ""])
 
     by_src = Counter(docs[k]["src"] for k in docs)
     linked_src = Counter((docs[k]["src"], links[k][1]) for k in links)
@@ -245,6 +250,7 @@ def main():
         "documents": dict(by_src), "skipped": dict(skipped),
         "linked": {f"{s} / {h}": n for (s, h), n in sorted(linked_src.items())},
         "unlinked": dict(unl_src),
+        "unlinked_for_manual": len(manual_todo), "waiting_for_cadastre_update": len(waiting),
         "buildings_with_docs": len(stage_b), "parcels_with_docs": len(stage_p),
     }
     with open(os.path.join(OUT, "report.json"), "w", encoding="utf-8") as f:
