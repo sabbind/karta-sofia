@@ -1,35 +1,35 @@
 {
  "documents": {
-  "nag-rs": 85114,
-  "nag-uve": 28893,
-  "dnsk-rp": 8584
+  "nag-rs": 85223,
+  "nag-uve": 28937,
+  "dnsk-rp": 19065
  },
  "skipped": {
-  "извън гр. София": 23656
+  "извън гр. София": 24522
  },
  "linked": {
-  "dnsk-rp / id": 705,
-  "dnsk-rp / kvupi": 1677,
-  "dnsk-rp / kvupi+адрес": 65,
-  "dnsk-rp / адрес": 794,
-  "nag-rs / id": 15139,
-  "nag-rs / kvupi": 22615,
-  "nag-rs / kvupi+адрес": 753,
-  "nag-rs / uve": 199,
-  "nag-rs / адрес": 3120,
-  "nag-uve / id": 8704,
-  "nag-uve / kvupi": 8651,
-  "nag-uve / kvupi+адрес": 321,
-  "nag-uve / rs": 128,
-  "nag-uve / адрес": 924
+  "dnsk-rp / id": 3146,
+  "dnsk-rp / kvupi": 4641,
+  "dnsk-rp / kvupi+адрес": 155,
+  "dnsk-rp / адрес": 1072,
+  "nag-rs / id": 15157,
+  "nag-rs / kvupi": 22638,
+  "nag-rs / kvupi+адрес": 755,
+  "nag-rs / uve": 399,
+  "nag-rs / адрес": 3121,
+  "nag-uve / id": 8734,
+  "nag-uve / kvupi": 8660,
+  "nag-uve / kvupi+адрес": 322,
+  "nag-uve / rs": 137,
+  "nag-uve / адрес": 925
  },
  "unlinked": {
-  "nag-rs": 25930,
-  "nag-uve": 4874,
-  "dnsk-rp": 4397
+  "nag-rs": 25760,
+  "nag-uve": 4870,
+  "dnsk-rp": 8292
  },
- "unlinked_for_manual": 34527,
- "waiting_for_cadastre_update": 674,
- "buildings_with_docs": 6394,
- "parcels_with_docs": 26667
+ "unlinked_for_manual": 38205,
+ "waiting_for_cadastre_update": 717,
+ "buildings_with_docs": 6457,
+ "parcels_with_docs": 27235
 }
