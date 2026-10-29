@@ -84,8 +84,12 @@ jobs:
           git add -A data out site/idx || true
           if git diff --cached --quiet; then echo "Няма промени"; else
             git commit -m "Обновяване на регистрите $(date +%F)"
-            git pull --rebase origin main || true
-            git push
+            # ако междувременно в хранилището има промени (напр. в кода), данните на агента имат предимство
+            for i in 1 2 3; do
+              if git pull --rebase -X theirs origin main && git push; then break; fi
+              git rebase --abort 2>/dev/null || true
+              sleep 10
+            done
           fi
 
       - name: Публикуване в Cloudflare Pages
