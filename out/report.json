@@ -5,13 +5,12 @@
   "dnsk-rp": 1406
  },
  "skipped": {
-  "извън гр. София": 22885
+  "извън гр. София": 22909
  },
  "linked": {
-  "dnsk-rp / id": 937,
-  "dnsk-rp / kvupi": 41,
+  "dnsk-rp / id": 1036,
+  "dnsk-rp / kvupi": 27,
   "dnsk-rp / kvupi+адрес": 2,
-  "dnsk-rp / адрес": 6,
   "nag-rs / id": 15139,
   "nag-rs / kvupi": 22615,
   "nag-rs / kvupi+адрес": 753,
@@ -26,10 +25,10 @@
  "unlinked": {
   "nag-rs": 25930,
   "nag-uve": 4874,
-  "dnsk-rp": 245
+  "dnsk-rp": 142
  },
- "unlinked_for_manual": 30377,
- "waiting_for_cadastre_update": 672,
- "buildings_with_docs": 6397,
- "parcels_with_docs": 26346
+ "unlinked_for_manual": 30272,
+ "waiting_for_cadastre_update": 674,
+ "buildings_with_docs": 6399,
+ "parcels_with_docs": 26351
 }

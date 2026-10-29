@@ -106,7 +106,7 @@ def fields(doc):
                 sc.get("Адрес"), doc.get("scope") or "")
     # dnsk (нов формат: отделни колони; стар формат: всичко е в „Местонахождение“)
     settle = doc.get("settlement") or ""
-    ids = find_ids(doc.get("cad_id")) or find_ids(settle)
+    ids = find_ids(doc.get("cad_id")) or find_ids(settle) or find_ids(doc.get("object"))
     kv = doc.get("kv")
     upi = doc.get("upi")
     if not kv:
