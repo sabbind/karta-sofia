@@ -38,6 +38,10 @@ COLS = {
     "Състояние": "status",
     "Администрация": "administration",
     "Община (обект)": "municipality",
+    # стар формат (2000–2025)
+    "РП №/дата": "number_date",
+    "Наименование на строежа": "object",
+    "Местонахождение": "settlement",
 }
 SKIP = {"Наименование ЮЛ/ Имена ФЛ", "ЕГН/Булстат/ЕИК", "Вид на възложителя"}
 
@@ -114,8 +118,20 @@ def parse_year_page(page):
 
 def is_sofia_municipality(r):
     txt = " ".join(r.get(k) or "" for k in ("municipality", "settlement", "cad_id", "province"))
-    return bool(re.search(r"СТОЛИЧНА|68134\.", txt, re.I)) or (
-        (r.get("municipality") or "").strip().lower() in ("софия", "столична") )
+    if re.search(r"СТОЛИЧНА|68134\.|гр\.\s*София\b|София\s*[-–]?\s*град|\bСО\b", txt, re.I):
+        return True
+    return (r.get("municipality") or "").strip().lower() in ("софия", "столична")
+
+
+def split_number_date(v):
+    """'ДНСК-РП-123/12.03.2015 г.' -> ('ДНСК-РП-123', '12.03.2015')."""
+    v = (v or "").strip()
+    m = re.search(r"(\d{1,2}\.\d{1,2}\.\d{4})", v)
+    date = m.group(1) if m else None
+    num = re.split(r"\s*/\s*|\s+от\s+|\s*,\s*", v, maxsplit=1)[0].strip() if v else ""
+    if date and num == date:
+        num = ""
+    return num, date
 
 
 def to_date(raw):
@@ -143,6 +159,10 @@ def harvest(all_years):
         unknown = [h for h in heads if h and h not in COLS and h not in SKIP and h not in ("Виж инфо",)]
         kept = 0
         for r in rows:
+            if r.get("number_date") and not r.get("number"):
+                r["number"], d = split_number_date(r.pop("number_date"))
+                r.setdefault("date_raw", d)
+            r.pop("number_date", None)
             if not r.get("number") or not is_sofia_municipality(r):
                 continue
             key = "dnsk-rp:" + re.sub(r"\s+", "", r["number"])

@@ -10,20 +10,25 @@
  "linked": {
   "dnsk-rp / id": 483,
   "dnsk-rp / kvupi": 20,
+  "dnsk-rp / kvupi+адрес": 1,
   "nag-rs / id": 15139,
   "nag-rs / kvupi": 22615,
-  "nag-rs / uve": 230,
+  "nag-rs / kvupi+адрес": 753,
+  "nag-rs / uve": 199,
+  "nag-rs / адрес": 3120,
   "nag-uve / id": 8704,
   "nag-uve / kvupi": 8651,
-  "nag-uve / rs": 168
+  "nag-uve / kvupi+адрес": 321,
+  "nag-uve / rs": 128,
+  "nag-uve / адрес": 924
  },
  "unlinked": {
-  "nag-rs": 29771,
-  "nag-uve": 6079,
-  "dnsk-rp": 30
+  "nag-rs": 25930,
+  "nag-uve": 4874,
+  "dnsk-rp": 29
  },
- "unlinked_for_manual": 35147,
- "waiting_for_cadastre_update": 733,
+ "unlinked_for_manual": 30171,
+ "waiting_for_cadastre_update": 662,
  "buildings_with_docs": 6386,
- "parcels_with_docs": 24394
+ "parcels_with_docs": 26271
 }

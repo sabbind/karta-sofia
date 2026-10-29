@@ -34,7 +34,7 @@ OUT = os.path.join(ROOT, "out")
 def load_cadastre():
     with gzip.open(os.path.join(DATA, "cadastre_buildings.txt.gz"), "rt", encoding="utf-8") as f:
         buildings = {l.strip() for l in f if l.strip()}
-    parcels, by_kv = {}, defaultdict(list)
+    parcels, by_kv, by_addr = {}, defaultdict(list), defaultdict(list)
     with gzip.open(os.path.join(DATA, "cadastre_parcels.csv.gz"), "rt", encoding="utf-8") as f:
         for r in csv.DictReader(f):
             parcels[r["id"]] = r
@@ -42,7 +42,44 @@ def load_cadastre():
             roman, _ = parse_upi(r["upi"])
             if kv and roman:
                 by_kv[(r["region"], kv, roman)].append(r)
-    return buildings, parcels, by_kv
+            sk, num = street_key(r["street"]), norm_num(r["strnum"])
+            r["_street"] = sk
+            if sk and num:
+                by_addr[(r["region"], sk, num)].append(r)
+    return buildings, parcels, by_kv, by_addr
+
+
+# ---------------------------------------------------------------- addresses
+_PREFIX = re.compile(r"^(?:ул|бул|пл|ж\.?\s*к|кв|м|в\.?\s*з|площад|булевард|улица)\b\.?\s*", re.I)
+
+
+def street_key(s):
+    """'ул. "Княз Ал.Дондуков-Корсаков"' -> 'княз ал дондуков корсаков'."""
+    if not s:
+        return ""
+    k = re.sub(r"[\"„“”'«»]", " ", s.lower())
+    for _ in range(2):
+        k = _PREFIX.sub("", k.strip())
+    k = re.sub(r"[.,\-–/()]", " ", k)
+    return re.sub(r"\s+", " ", k).strip()
+
+
+def norm_num(n):
+    if not n:
+        return ""
+    m = re.match(r"^\s*(\d+)\s*([А-Яа-яA-Za-z]?)\b", n.strip())
+    return (m.group(1) + m.group(2).upper()) if m else ""
+
+
+ADDR_RE = re.compile(r"(?:ул|бул|пл)\.?\s*(?:ул\.?\s*)?[\"„“]?([^№,;\"„“”]+?)[\"“”]?\s*№\s*(\d+\s*[А-Яа-я]?)", re.I)
+
+
+def parse_address(text):
+    """-> (street_key, number) from 'гр. София, ул. АНРИ БАРБЮС № 6, бл. 118' or (None, None)."""
+    m = ADDR_RE.search(text or "")
+    if not m:
+        return None, None
+    return street_key(m.group(1)), norm_num(m.group(2))
 
 
 # ---------------------------------------------------------------- per-source field extraction
@@ -67,10 +104,18 @@ def fields(doc):
             ids = find_ids(doc.get("scope"))
         return (ids, doc.get("region"), sc.get("Квартал по регулация"), sc.get("УПИ"), sc.get("Местност"),
                 sc.get("Адрес"), doc.get("scope") or "")
-    # dnsk
-    ids = find_ids(doc.get("cad_id"))
+    # dnsk (нов формат: отделни колони; стар формат: всичко е в „Местонахождение“)
     settle = doc.get("settlement") or ""
-    return (ids, district_from(settle) or district_from(doc.get("place")), doc.get("kv"), doc.get("upi"),
+    ids = find_ids(doc.get("cad_id")) or find_ids(settle)
+    kv = doc.get("kv")
+    upi = doc.get("upi")
+    if not kv:
+        m = re.search(r"\bкв\.?\s*(\d+\s*[А-Яа-я]?)\b(?!\s*\.)", settle)
+        kv = m.group(1) if m else None
+    if not upi:
+        m = re.search(r"УПИ\s*([IVXLСІХ]+[^,;]*)", settle)
+        upi = m.group(1) if m else None
+    return (ids, district_from(settle) or district_from(doc.get("place")), kv, upi,
             doc.get("place"), settle, settle + " " + (doc.get("municipality") or ""))
 
 
@@ -147,7 +192,7 @@ def short_issuer(s):
 
 
 def main():
-    buildings, parcels, by_kv = load_cadastre()
+    buildings, parcels, by_kv, by_addr = load_cadastre()
     manual = load_manual()
     docs = {}
     for name in ("nag_rs.jsonl", "nag_uve.jsonl", "dnsk_rp.jsonl"):
@@ -175,6 +220,20 @@ def main():
         if t:
             links[key] = (t, "kvupi")
             continue
+        sk, num = parse_address(addr if d["src"].startswith("nag") else (d.get("settlement") or ""))
+        if note and note[0].isdigit() and sk:
+            # няколко имота с този кв. + УПИ: избери този на същата улица
+            cands = [c for c in by_kv.get((district, norm_kv(kv), parse_upi(upi)[0]), []) if c["_street"] == sk]
+            if len(cands) == 1:
+                links[key] = ([("p", cands[0]["id"])], "kvupi+адрес")
+                continue
+        if sk and num and district:
+            cands = by_addr.get((district, sk, num), [])
+            if len(cands) == 1:
+                links[key] = ([("p", cands[0]["id"])], "адрес")
+                continue
+            if len(cands) > 1:
+                note = "; ".join(filter(None, [note, f"{len(cands)} имота с адрес {sk} {num}"]))
         notes[key] = "; ".join(filter(None, [
             manual_note, ("идентификатор(и) не са в кадастъра: " + ", ".join(unknown)) if unknown else None, note]))
 
