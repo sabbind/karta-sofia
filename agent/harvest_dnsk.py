@@ -141,6 +141,8 @@ def to_date(raw):
 
 def harvest(all_years):
     db = load_jsonl("dnsk_rp.jsonl")
+    # стари ключове без година (до 29.10.2026) – изхвърлят се, годините се изтеглят наново
+    db = {k: v for k, v in db.items() if k.count(":") >= 2}
     years = year_links()
     if not years:
         raise SystemExit("no year links found on " + INDEX)
@@ -165,7 +167,8 @@ def harvest(all_years):
             r.pop("number_date", None)
             if not r.get("number") or not is_sofia_municipality(r):
                 continue
-            key = "dnsk-rp:" + re.sub(r"\s+", "", r["number"])
+            # номерата се повтарят от година на година -> ключът включва годината
+            key = f"dnsk-rp:{y}:" + re.sub(r"\s+", "", r["number"])
             r.update({"key": key, "src": "dnsk-rp", "year": y, "date": to_date(r.get("date_raw"))})
             r.pop("date_raw", None)
             db[key] = r
