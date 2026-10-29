@@ -705,3 +705,44 @@ documents 114606 manual links 0
  "buildings_with_docs": 6386,
  "parcels_with_docs": 24394
 }
+=== 2026-10-29 06:40:57 ДНСК ===
+dnsk 2026: 3310 rows, 649 in Столична община (5s); unknown columns: ['Област (адм.)', 'Район (адм.)']
+dnsk 2025: 5575 rows, 757 in Столична община (3s); unknown columns: ['№']
+dnsk: 1406 records, 0 years with errors
+=== 2026-10-29 06:41:07 Свързване ===
+documents 115413 manual links 0
+{
+ "documents": {
+  "nag-rs": 85114,
+  "nag-uve": 28893,
+  "dnsk-rp": 1406
+ },
+ "skipped": {
+  "извън гр. София": 22885
+ },
+ "linked": {
+  "dnsk-rp / id": 937,
+  "dnsk-rp / kvupi": 41,
+  "dnsk-rp / kvupi+адрес": 2,
+  "dnsk-rp / адрес": 6,
+  "nag-rs / id": 15139,
+  "nag-rs / kvupi": 22615,
+  "nag-rs / kvupi+адрес": 753,
+  "nag-rs / uve": 199,
+  "nag-rs / адрес": 3120,
+  "nag-uve / id": 8704,
+  "nag-uve / kvupi": 8651,
+  "nag-uve / kvupi+адрес": 321,
+  "nag-uve / rs": 128,
+  "nag-uve / адрес": 924
+ },
+ "unlinked": {
+  "nag-rs": 25930,
+  "nag-uve": 4874,
+  "dnsk-rp": 245
+ },
+ "unlinked_for_manual": 30377,
+ "waiting_for_cadastre_update": 672,
+ "buildings_with_docs": 6397,
+ "parcels_with_docs": 26346
+}
