@@ -746,3 +746,69 @@ documents 115413 manual links 0
  "buildings_with_docs": 6397,
  "parcels_with_docs": 26346
 }
+=== 2026-10-29 18:13:36 ДНСК ===
+dnsk 2026: 3310 rows, 649 in Столична община (5s); unknown columns: ['Област (адм.)', 'Район (адм.)']
+dnsk 2025: 5575 rows, 757 in Столична община (4s); unknown columns: ['№']
+dnsk 2024: 5751 rows, 793 in Столична община (4s); unknown columns: ['№']
+dnsk 2023: 4746 rows, 639 in Столична община (3s); unknown columns: ['№']
+dnsk 2022: 3749 rows, 584 in Столична община (3s); unknown columns: ['№']
+dnsk 2021: 3555 rows, 653 in Столична община (3s); unknown columns: ['№']
+dnsk 2020: 3888 rows, 692 in Столична община (3s); unknown columns: ['№']
+dnsk 2019: 3964 rows, 566 in Столична община (2s); unknown columns: ['№']
+dnsk 2018: 3473 rows, 534 in Столична община (3s); unknown columns: ['№']
+dnsk 2017: 3144 rows, 517 in Столична община (3s); unknown columns: ['№']
+dnsk 2016: 3599 rows, 590 in Столична община (3s); unknown columns: ['№']
+dnsk 2015: 3996 rows, 615 in Столична община (3s); unknown columns: ['№']
+dnsk 2014: 3532 rows, 625 in Столична община (3s); unknown columns: ['№']
+dnsk 2013: 4082 rows, 702 in Столична община (3s); unknown columns: ['№']
+dnsk 2012: 4781 rows, 780 in Столична община (5s); unknown columns: ['№']
+dnsk 2011: 5552 rows, 1025 in Столична община (3s); unknown columns: ['№']
+dnsk 2010: 4658 rows, 884 in Столична община (3s); unknown columns: ['№']
+dnsk 2009: 5422 rows, 1032 in Столична община (3s); unknown columns: ['№']
+dnsk 2008: 4773 rows, 973 in Столична община (3s); unknown columns: ['№']
+dnsk 2007: 4208 rows, 871 in Столична община (2s); unknown columns: ['№']
+dnsk 2006: 3710 rows, 866 in Столична община (3s); unknown columns: ['№']
+dnsk 2005: 3004 rows, 543 in Столична община (3s); unknown columns: ['№']
+dnsk 2004: 3093 rows, 556 in Столична община (3s); unknown columns: ['№']
+dnsk 2003: 7592 rows, 1456 in Столична община (4s); unknown columns: ['№']
+dnsk 2002: 7943 rows, 397 in Столична община (2s); unknown columns: ['№']
+dnsk 2001: 10684 rows, 896 in Столична община (3s); unknown columns: ['№']
+dnsk 2000: 48 rows, 32 in Столична община (3s); unknown columns: ['№']
+dnsk: 8584 records, 0 years with errors
+=== 2026-10-29 18:15:03 Свързване ===
+documents 122591 manual links 0
+{
+ "documents": {
+  "nag-rs": 85114,
+  "nag-uve": 28893,
+  "dnsk-rp": 8584
+ },
+ "skipped": {
+  "извън гр. София": 23656
+ },
+ "linked": {
+  "dnsk-rp / id": 705,
+  "dnsk-rp / kvupi": 1677,
+  "dnsk-rp / kvupi+адрес": 65,
+  "dnsk-rp / адрес": 794,
+  "nag-rs / id": 15139,
+  "nag-rs / kvupi": 22615,
+  "nag-rs / kvupi+адрес": 753,
+  "nag-rs / uve": 199,
+  "nag-rs / адрес": 3120,
+  "nag-uve / id": 8704,
+  "nag-uve / kvupi": 8651,
+  "nag-uve / kvupi+адрес": 321,
+  "nag-uve / rs": 128,
+  "nag-uve / адрес": 924
+ },
+ "unlinked": {
+  "nag-rs": 25930,
+  "nag-uve": 4874,
+  "dnsk-rp": 4397
+ },
+ "unlinked_for_manual": 34527,
+ "waiting_for_cadastre_update": 674,
+ "buildings_with_docs": 6394,
+ "parcels_with_docs": 26667
+}
