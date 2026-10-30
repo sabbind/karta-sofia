@@ -48,6 +48,9 @@
   #panel .id { font-family: ui-monospace, Menlo, Consolas, monospace; }
   #panel .permits { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 13px; }
   #panel .permits h3 { margin: 0 0 6px; font-size: 13px; font-weight: 650; }
+  .docgroup { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
+  .docgroup summary { cursor: pointer; font-weight: 600; font-size: 13px; color: var(--muted); }
+  .docgroup[open] summary { color: var(--fg); margin-bottom: 4px; }
   #panel .permits .empty { color: var(--muted); }
   .doc { display: grid; grid-template-columns: 10px 1fr; gap: 0 9px; padding: 7px 0; border-top: 1px dashed var(--line); }
   .doc:first-of-type { border-top: 0; }
@@ -129,10 +132,11 @@ colorExpr.push(OTHER_COLOR);
 
 const STAGES = [
   { st: 2, name: "Въведена в експлоатация", color: "#2f9e5b" },
-  { st: 1, name: "С разрешение за строеж", color: "#e8892b" },
+  { st: 1, name: "С разрешение за строеж на сградата", color: "#e8892b" },
+  { st: 3, name: "Само преустройства, инфраструктура или други", color: "#b9aedb" },
   { st: 0, name: "Без документи в регистрите", color: "#d5d8dd" },
 ];
-const stageExpr = ["match", ["coalesce", ["feature-state", "st"], 0], 2, STAGES[0].color, 1, STAGES[1].color, STAGES[2].color];
+const stageExpr = ["match", ["coalesce", ["feature-state", "st"], 0], 2, STAGES[0].color, 1, STAGES[1].color, 3, STAGES[2].color, STAGES[3].color];
 const DOC_TYPES = {
   "nag-rs": { name: "Разрешение за строеж", color: STAGES[1].color },
   "nag-uve": { name: "Удостоверение за въвеждане в експлоатация", color: STAGES[0].color },
@@ -322,9 +326,18 @@ async function showDocs(layer, id, token) {
              .sort((a, b) => (b[2] || "").localeCompare(a[2] || ""));
   const box = document.getElementById("permits");
   if (!box) return;
-  box.innerHTML = list.length
-    ? `<h3>Документи (${list.length})</h3>` + list.map(docHtml).join("")
-    : `<span class="empty">Няма свързани документи от регистрите на НАГ и ДНСК.</span>`;
+  if (!list.length) { box.innerHTML = `<span class="empty">Няма свързани документи от регистрите на НАГ и ДНСК.</span>`; return; }
+  // d[8]: m – основни, p – преустройства и промени в сградата, u – техническа инфраструктура, o – други
+  const by = k => list.filter(d => (d[8] || "m") === k);
+  const main = by("m");
+  let html = `<h3>Основни документи за сградата (${main.length})</h3>`;
+  html += main.length ? main.map(docHtml).join("") : `<span class="empty">Няма разрешение за строеж или въвеждане в експлоатация на сграда.</span>`;
+  const group = (title, arr) => arr.length
+    ? `<details class="docgroup"><summary>${title} (${arr.length})</summary>${arr.map(docHtml).join("")}</details>` : "";
+  html += group("Преустройства и промени в сградата", by("p"));
+  html += group("Техническа инфраструктура (ел., топло, газ, ВиК, мобилни оператори…)", by("u"));
+  html += group("Други (огради, гаражи, допълващо застрояване…)", by("o"));
+  box.innerHTML = html;
 }
 
 let panelToken = 0;
