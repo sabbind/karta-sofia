@@ -1526,3 +1526,42 @@ buildings inheriting parcel stage: 39963
  "buildings_with_docs": 45517,
  "parcels_with_docs": 27235
 }
+=== 2026-10-30 19:13:04 Свързване ===
+documents 133225 manual links 0
+buildings inheriting parcel stage: 39963
+grid cells: 3694
+{
+ "documents": {
+  "nag-rs": 85223,
+  "nag-uve": 28937,
+  "dnsk-rp": 19065
+ },
+ "skipped": {
+  "извън гр. София": 24522
+ },
+ "linked": {
+  "dnsk-rp / id": 3146,
+  "dnsk-rp / kvupi": 4641,
+  "dnsk-rp / kvupi+адрес": 155,
+  "dnsk-rp / адрес": 1072,
+  "nag-rs / id": 15157,
+  "nag-rs / kvupi": 22638,
+  "nag-rs / kvupi+адрес": 755,
+  "nag-rs / uve": 399,
+  "nag-rs / адрес": 3121,
+  "nag-uve / id": 8734,
+  "nag-uve / kvupi": 8660,
+  "nag-uve / kvupi+адрес": 322,
+  "nag-uve / rs": 137,
+  "nag-uve / адрес": 925
+ },
+ "unlinked": {
+  "nag-rs": 25760,
+  "nag-uve": 4870,
+  "dnsk-rp": 8292
+ },
+ "unlinked_for_manual": 38205,
+ "waiting_for_cadastre_update": 717,
+ "buildings_with_docs": 45517,
+ "parcels_with_docs": 27235
+}
