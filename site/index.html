@@ -98,6 +98,7 @@
     <label><input type="radio" name="mode" id="mode-use" value="use"><span>Предназначение</span></label>
   </div>
   <div id="legend-rows"></div>
+  <label class="row" style="margin-top:6px;cursor:pointer"><input type="checkbox" id="color-parcels" checked> Оцветявай и имотите</label>
 </details>
 
 <aside id="panel" class="card" aria-live="polite">
@@ -149,23 +150,33 @@ let mode = "permits";
 function renderLegend() {
   const rows = mode === "permits"
     ? STAGES.map(s => `<div class="row"><span class="sw" style="background:${s.color}"></span>${s.name}</div>`).join("")
-      + `<div class="row" style="margin-top:4px"><span class="sw" style="background:${STAGES[1].color}44"></span>Имот с документи (при приближаване)</div>`
+      + `<div class="row" style="margin-top:4px"><span class="sw" style="background:${STAGES[1].color}44"></span>Имот с документи – в цвета на етапа (при приближаване)</div>`
     : GROUPS.map(g => `<div class="row"><span class="sw" style="background:${g.color}"></span>${g.name}</div>`).join("");
   document.getElementById("legend-rows").innerHTML = rows;
 }
 renderLegend();
 
+let colorParcels = true;
 function applyMode() {
   if (!map.getLayer("buildings-fill")) return;
-  map.setPaintProperty("buildings-fill", "fill-color",
-    ["case", ["boolean", ["feature-state", "selected"], false], "#1f5fae", mode === "permits" ? stageExpr : colorExpr]);
+  const permits = mode === "permits";
+  const hasDocs = [">", ["coalesce", ["feature-state", "st"], 0], 0];
+  const sel = ["boolean", ["feature-state", "selected"], false];
+  map.setPaintProperty("buildings-fill", "fill-color", ["case", sel, "#1f5fae", permits ? stageExpr : colorExpr]);
   map.setPaintProperty("parcels-fill", "fill-opacity",
-    ["case", ["boolean", ["feature-state", "selected"], false], 0.18,
-      mode === "permits" ? ["case", [">", ["coalesce", ["feature-state", "st"], 0], 0], 0.22, 0] : 0]);
-  map.setPaintProperty("parcels-fill", "fill-color",
-    ["case", ["boolean", ["feature-state", "selected"], false], "#1f5fae", stageExpr]);
+    ["case", sel, 0.18, permits && colorParcels ? ["case", hasDocs, 0.35, 0] : 0]);
+  map.setPaintProperty("parcels-fill", "fill-color", ["case", sel, "#1f5fae", stageExpr]);
+  map.setPaintProperty("parcels-line", "line-color",
+    ["case", sel, "#1f5fae", permits && colorParcels ? ["case", hasDocs, stageExpr, "#7a6f9b"] : "#7a6f9b"]);
+  map.setPaintProperty("parcels-line", "line-width",
+    ["case", sel, 2.5, permits && colorParcels ? ["case", hasDocs, ["interpolate", ["linear"], ["zoom"], 14, 1, 18, 2.5],
+      ["interpolate", ["linear"], ["zoom"], 15, 0.4, 18, 1.2]] : ["interpolate", ["linear"], ["zoom"], 15, 0.4, 18, 1.2]]);
+  map.setPaintProperty("parcels-line", "line-opacity",
+    ["case", sel, 1, permits && colorParcels ? ["case", hasDocs, 0.95, ["step", ["zoom"], 0, 15, 0.8]] : ["step", ["zoom"], 0, 15, 0.8]]);
+  document.getElementById("color-parcels").disabled = !permits;
   renderLegend();
 }
+document.getElementById("color-parcels").addEventListener("change", e => { colorParcels = e.target.checked; applyMode(); });
 document.querySelectorAll('input[name="mode"]').forEach(r => r.addEventListener("change", e => { mode = e.target.value; applyMode(); }));
 
 const protocol = new pmtiles.Protocol();
@@ -207,7 +218,7 @@ map.on("load", () => {
     },
   }, firstSymbol);
   map.addLayer({
-    id: "parcels-line", type: "line", source: "cad", "source-layer": "parcels", minzoom: 15,
+    id: "parcels-line", type: "line", source: "cad", "source-layer": "parcels", minzoom: 14,
     paint: {
       "line-color": ["case", ["boolean", ["feature-state", "selected"], false], "#1f5fae", "#7a6f9b"],
       "line-width": ["case", ["boolean", ["feature-state", "selected"], false], 2.5,
