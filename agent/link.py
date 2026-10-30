@@ -371,6 +371,13 @@ def main():
     inherited = 0
     for pid, st in stage_p.items():
         blds = bld_by_parcel.get(pid, [])
+        if len(blds) > 1:
+            # няколко сгради: не знаем за коя е документът -> сградите без собствени документи стават „има други документи“
+            for b in blds:
+                if stage_b.get(b, 0) == 0:
+                    stage_b[b] = 3
+                    inherited += 1
+            continue
         if len(blds) != 1:
             continue
         b = blds[0]

@@ -133,7 +133,7 @@ colorExpr.push(OTHER_COLOR);
 const STAGES = [
   { st: 2, name: "Въведена в експлоатация", color: "#2f9e5b" },
   { st: 1, name: "С разрешение за строеж на сградата", color: "#e8892b" },
-  { st: 3, name: "Само преустройства, инфраструктура или други", color: "#b9aedb" },
+  { st: 3, name: "Има други документи (преустройства, инфраструктура или само за имота)", color: "#b9aedb" },
   { st: 0, name: "Без документи в регистрите", color: "#d5d8dd" },
 ];
 const stageExpr = ["match", ["coalesce", ["feature-state", "st"], 0], 2, STAGES[0].color, 1, STAGES[1].color, 3, STAGES[2].color, STAGES[3].color];
