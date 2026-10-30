@@ -1565,3 +1565,49 @@ grid cells: 3694
  "buildings_with_docs": 45517,
  "parcels_with_docs": 27235
 }
+=== 2026-10-30 20:19:25 Свързване ===
+address points: 67242 street, 5693 blocks
+documents 133225 manual links 0
+buildings inheriting parcel stage: 37281
+grid cells: 3694
+{
+ "documents": {
+  "nag-rs": 85223,
+  "nag-uve": 28937,
+  "dnsk-rp": 19065
+ },
+ "skipped": {
+  "извън гр. София": 24522
+ },
+ "linked": {
+  "dnsk-rp / id": 3146,
+  "dnsk-rp / kvupi": 4641,
+  "dnsk-rp / kvupi+адрес": 155,
+  "dnsk-rp / адрес": 87,
+  "dnsk-rp / адресна точка": 1576,
+  "dnsk-rp / блок": 245,
+  "nag-rs / id": 15157,
+  "nag-rs / kvupi": 22638,
+  "nag-rs / kvupi+адрес": 755,
+  "nag-rs / uve": 374,
+  "nag-rs / адрес": 246,
+  "nag-rs / адресна точка": 4137,
+  "nag-rs / блок": 1840,
+  "nag-uve / id": 8734,
+  "nag-uve / kvupi": 8660,
+  "nag-uve / kvupi+адрес": 322,
+  "nag-uve / rs": 123,
+  "nag-uve / адрес": 67,
+  "nag-uve / адресна точка": 1333,
+  "nag-uve / блок": 232
+ },
+ "unlinked": {
+  "nag-rs": 22683,
+  "nag-uve": 4178,
+  "dnsk-rp": 7456
+ },
+ "unlinked_for_manual": 33734,
+ "waiting_for_cadastre_update": 583,
+ "buildings_with_docs": 48578,
+ "parcels_with_docs": 28155
+}
