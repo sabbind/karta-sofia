@@ -477,6 +477,26 @@ def main():
             if add:
                 links[rk] = (targets + add, how)
 
+    # ---------------- връзките УВЕ <-> РС (от страницата на УВЕ в НАГ) – за показване и за проверка
+    NAG_INFO = "https://nag.sofia.bg/RegisterInfo/Info?url="
+    refs = defaultdict(list)
+    mismatches = []
+    pset = lambda k: {(c if kd == "p" else ".".join(c.split(".")[:3])) for kd, c in links[k][0]}  # noqa: E731
+    for key, d in docs.items():
+        if d["src"] != "nag-uve":
+            continue
+        for ref in d.get("permit_ref") or []:
+            if not ref.get("hash"):
+                continue
+            refs[key].append(["РС " + (ref.get("number") or ""), NAG_INFO + ref["hash"]])
+            rk = rs_by_hash.get(ref["hash"])
+            if rk:
+                refs[rk].append(["УВЕ " + (d.get("number") or ""), d.get("url")])
+                if key in links and rk in links and not (pset(key) & pset(rk)):
+                    mismatches.append([d.get("number"), d.get("url"), ", ".join(sorted(pset(key))), links[key][1],
+                                       docs[rk].get("number"), docs[rk].get("url"), ", ".join(sorted(pset(rk))),
+                                       links[rk][1], (d.get("object") or "")[:160]])
+
     # ---------------- outputs for the map
     per_reg = defaultdict(lambda: defaultdict(list))
     parcels_bld_docs = set()
@@ -487,7 +507,8 @@ def main():
         cancelled = "отмен" in (d.get("status") or "").lower()
         kind_doc = doc_kind(d.get("object"))
         entry = [d["src"], d.get("number"), d.get("date"), d.get("status"), short_issuer(d.get("issuer")),
-                 (d.get("object") or "")[:240], d.get("url") or d.get("pdf") or dnsk_year_page(d), how, kind_doc]
+                 (d.get("object") or "")[:240], d.get("url") or d.get("pdf") or dnsk_year_page(d), how, kind_doc,
+                 refs.get(key) or None]
         for kind, cid in targets:
             p = cid.split(".")
             per_reg[p[1]][".".join(p[2:])].append(entry)
@@ -564,6 +585,12 @@ def main():
 
     # ---------------- unlinked table (за ръчно свързване)
     os.makedirs(OUT, exist_ok=True)
+    with open(os.path.join(OUT, "razminavania_uve_rs.csv"), "w", encoding="utf-8-sig", newline="") as f:
+        w = csv.writer(f, delimiter=";")
+        w.writerow(["УВЕ №", "УВЕ линк", "УВЕ – имот(и)", "УВЕ – как", "РС №", "РС линк", "РС – имот(и)",
+                    "РС – как", "обект"])
+        w.writerows(mismatches)
+    print("УВЕ и РС на различни места:", len(mismatches), flush=True)
     cols = ["key", "регистър", "номер", "дата", "издател", "район", "обект", "местност", "квартал", "УПИ",
             "адрес/обхват", "бележка", "линк", "identifier"]
     src_name = {"nag-rs": "НАГ – РС", "nag-uve": "НАГ – УВЕ", "dnsk-rp": "ДНСК – РП"}

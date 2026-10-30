@@ -467,7 +467,7 @@ function loadDocs(reg) {
 }
 
 function docHtml(d) {
-  const [src, number, date, status, issuer, object, url, how] = d;
+  const [src, number, date, status, issuer, object, url, how, , refs] = d;
   const t = DOC_TYPES[src] || { name: src, color: "#999" };
   const cancelled = /отмен/i.test(status || "");
   const dt = date ? date.split("-").reverse().join(".") : "";
@@ -476,6 +476,8 @@ function docHtml(d) {
     <div><div class="t">${esc(t.name)} № ${esc(number)}</div>
     <div class="m">${esc([dt, issuer, status].filter(Boolean).join(" · "))}${HOW[how] ? " · " + esc(HOW[how]) : ""}</div>
     <div class="o">${esc(object)}</div>
+    ${refs ? `<div class="m">${src === "nag-uve" ? "По" : "Въведено с"} ${refs.map(([l, u]) =>
+      u ? `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(l)}</a>` : esc(l)).join(", ")}</div>` : ""}
     ${url ? `<div class="m"><a href="${esc(url)}" target="_blank" rel="noopener">${src !== "dnsk-rp" ? "Документът в регистъра на НАГ" : /\.pdf$/i.test(url) ? "PDF на документа"
       : "Регистърът на ДНСК за " + (url.match(/(\d{4})-g\/?$/) || [, ""])[1] + " г. (няма сканиран документ)"} ↗</a></div>` : ""}</div></div>`;
 }
