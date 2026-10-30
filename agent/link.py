@@ -364,6 +364,26 @@ def main():
                 target[cid] = max(target.get(cid, 0) if target.get(cid, 0) != 3 else 0, st)
             elif not cancelled and target.get(cid, 0) == 0:
                 target[cid] = 3  # само други документи (преустройства, ремонти, станции…)
+    # документи само към имот: ако в имота има точно една сграда, тя взима етапа на имота
+    bld_by_parcel = defaultdict(list)
+    for b in buildings:
+        bld_by_parcel[".".join(b.split(".")[:3])].append(b)
+    inherited = 0
+    for pid, st in stage_p.items():
+        blds = bld_by_parcel.get(pid, [])
+        if len(blds) != 1:
+            continue
+        b = blds[0]
+        cur = stage_b.get(b, 0)
+        if cur in (1, 2):
+            new_st = max(cur, st) if st in (1, 2) else cur
+        else:
+            new_st = st if st in (1, 2) else 3
+        if new_st != cur:
+            stage_b[b] = new_st
+            inherited += 1
+    print("buildings inheriting parcel stage:", inherited, flush=True)
+
     ddir = os.path.join(SITE, "idx", "docs")
     os.makedirs(ddir, exist_ok=True)
     for f in os.listdir(ddir):
