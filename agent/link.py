@@ -528,6 +528,7 @@ def main():
     for b in buildings:
         bld_by_parcel[".".join(b.split(".")[:3])].append(b)
     inherited = 0
+    single_bld = {}  # имот -> единствената (основна) сграда в него
     for pid, st in stage_p.items():
         if pid not in parcels_bld_docs:
             continue  # само техническа инфраструктура / други към имота – не оцветяват сградите
@@ -558,6 +559,7 @@ def main():
         if len(blds) != 1:
             continue
         b = blds[0]
+        single_bld[pid] = b
         if pid in year_p:
             year_b[b] = max(year_b.get(b, 0), year_p[pid])
         cur = stage_b.get(b, 0)
@@ -569,6 +571,26 @@ def main():
             stage_b[b] = new_st
             inherited += 1
     print("buildings inheriting parcel stage:", inherited, flush=True)
+    # основните документи и преустройствата към имот с една сграда се показват при сградата
+    moved = 0
+    for pid, b in single_bld.items():
+        reg, prest = pid.split(".")[1], pid.split(".")[2]
+        brest = ".".join(b.split(".")[2:])
+        items = per_reg[reg]
+        keep = []
+        have = {(e[0], e[1]) for e in items.get(brest, [])}
+        for e in items.get(prest, []):
+            if e[8] in ("m", "p"):
+                if (e[0], e[1]) not in have:
+                    items[brest].append(e[:10] + ["имот"])  # [10]: вписан с имота
+                    moved += 1
+            else:
+                keep.append(e)
+        if keep:
+            items[prest] = keep
+        else:
+            items.pop(prest, None)
+    print("documents shown at the only building of their parcel:", moved, flush=True)
 
     ddir = os.path.join(SITE, "idx", "docs")
     os.makedirs(ddir, exist_ok=True)

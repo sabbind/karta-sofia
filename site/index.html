@@ -467,14 +467,14 @@ function loadDocs(reg) {
 }
 
 function docHtml(d) {
-  const [src, number, date, status, issuer, object, url, how, , refs] = d;
+  const [src, number, date, status, issuer, object, url, how, , refs, via] = d;
   const t = DOC_TYPES[src] || { name: src, color: "#999" };
   const cancelled = /отмен/i.test(status || "");
   const dt = date ? date.split("-").reverse().join(".") : "";
   return `<div class="doc${cancelled ? " cancelled" : ""}">
     <span class="dot" style="background:${t.color}"></span>
     <div><div class="t">${esc(t.name)} № ${esc(number)}</div>
-    <div class="m">${esc([dt, issuer, status].filter(Boolean).join(" · "))}${HOW[how] ? " · " + esc(HOW[how]) : ""}</div>
+    <div class="m">${esc([dt, issuer, status].filter(Boolean).join(" · "))}${HOW[how] ? " · " + esc(HOW[how]) : ""}${via === "имот" ? " · вписан с имота (единствената сграда в него)" : ""}</div>
     <div class="o">${esc(object)}</div>
     ${refs ? `<div class="m">${src === "nag-uve" ? "По" : "Въведено с"} ${refs.map(([l, u]) =>
       u ? `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(l)}</a>` : esc(l)).join(", ")}</div>` : ""}
@@ -521,11 +521,13 @@ async function showDocs(layer, id, token) {
       + fromParcel.map(docHtml).join("");
     if (rest) html += `<div class="m" style="margin-top:8px">В имота има още ${rest} документа за техническа инфраструктура и други – кликнете върху имота.</div>`;
   } else {
-    html += cats(parcelDocs, "Документи за имота", "Няма разрешение за строеж или въвеждане в експлоатация, вписано с идентификатора на имота.");
     const blds = Object.keys(items).filter(r => r.startsWith(parcelRest + ".")).sort();
+    html += cats(parcelDocs, "Документи за имота", blds.length
+      ? "Документите за строеж и въвеждане са при сградите – вижте по-долу."
+      : "Няма разрешение за строеж или въвеждане в експлоатация, вписано с идентификатора на имота.");
     for (const r of blds) {
       const arr = prep(items[r]);
-      if (arr.length) html += group(`Сграда 68134.${esc(p[1])}.${esc(r)}`, arr);
+      if (arr.length) html += group(`Сграда 68134.${esc(p[1])}.${esc(r)}`, arr, blds.length === 1);
     }
     if (blds.length) html = html.replace(/(<details class="docgroup"><summary>Сграда)/, `<h3>Документи за сградите в имота</h3>$1`);
   }
