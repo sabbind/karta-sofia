@@ -58,6 +58,71 @@ def load_cadastre():
     return buildings, parcels, by_kv, by_addr
 
 
+def area_key(s):
+    """'ж.к. Младост 4' / 'кв. МЛАДОСТ 4' / 'ж.к. „Люлин“ - 6' -> 'младост 4'."""
+    k = re.sub(r"[\"„“”'«»]", " ", (s or "").lower())
+    k = re.sub(r"^\s*(?:ж\.?\s*к\.?|кв\.?|к-с|комплекс|жк\b|м\.|местност\b)\s*", "", k)
+    k = re.sub(r"[.,\-–/()]", " ", k)
+    return re.sub(r"\s+", " ", k).strip()
+
+
+def norm_block(b):
+    m = re.match(r"^\s*(\d+)\s*([А-Яа-яA-Za-z]?)\b", b or "")
+    return (m.group(1) + m.group(2).upper()) if m else ""
+
+
+def load_addresses():
+    """Адресните точки на ГИС – София (data/addresses.csv.gz), вързани с имот и сграда."""
+    by_street, by_block = defaultdict(list), defaultdict(list)
+    path = os.path.join(DATA, "addresses.csv.gz")
+    if not os.path.exists(path):
+        return by_street, by_block
+    with gzip.open(path, "rt", encoding="utf-8") as f:
+        for r in csv.DictReader(f, delimiter=";"):
+            if r["settlement"] != "гр. София" or not r["parcel"]:
+                continue
+            rec = (r["region"], r["parcel"], r["building"])
+            sk, num = street_key(r["street"]), norm_num(r["num"])
+            if sk and num:
+                by_street[(sk, num)].append(rec)
+            ak, bl = area_key(r["area"]), norm_block(r["block"])
+            if ak and bl:
+                by_block[(ak, bl)].append(rec)
+    return by_street, by_block
+
+
+BLOCK_RE = re.compile(r"(?:ж\.?\s*к\.?|\bкв\.?|к-с|комплекс)\s*[\"„“]?([А-Яа-я][А-Яа-я0-9 \-.]*?)[\"“”]?\s*[,;]?\s*"
+                      r"бл(?:ок)?\.?\s*№?\s*(\d+\s*[А-Яа-я]?)\b", re.I)
+
+
+def parse_block(text):
+    m = BLOCK_RE.search(text or "")
+    return (area_key(m.group(1)), norm_block(m.group(2))) if m else (None, None)
+
+
+def link_by_address_points(district, sk, num, ak, bl, by_street, by_block):
+    """-> (targets, how, note). Блок -> сградата; улица и номер -> имотът."""
+    def pick(cands):
+        if district:
+            cands = [c for c in cands if c[0] == district]  # друг район -> не е същият адрес
+        return cands
+    if ak and bl:
+        cands = pick(by_block.get((ak, bl), []))
+        blds = {c[2] for c in cands if c[2]}
+        if len(blds) == 1:
+            return [("b", blds.pop())], "блок", None
+        if len(blds) > 1:
+            return None, None, f"{len(blds)} сгради за {ak} бл. {bl}"
+    if sk and num:
+        cands = pick(by_street.get((sk, num), []))
+        pcls = {c[1] for c in cands}
+        if len(pcls) == 1:
+            return [("p", pcls.pop())], "адресна точка", None
+        if len(pcls) > 1:
+            return None, None, f"{len(pcls)} имота с адрес {sk} {num}"
+    return None, None, None
+
+
 # ---------------------------------------------------------------- addresses
 _PREFIX = re.compile(r"^(?:ул|бул|пл|ж\.?\s*к|кв|м|в\.?\s*з|площад|булевард|улица)\b\.?\s*", re.I)
 
@@ -319,6 +384,8 @@ def write_grid(stage_b):
 
 def main():
     buildings, parcels, by_kv, by_addr = load_cadastre()
+    addr_street, addr_block = load_addresses()
+    print("address points:", sum(map(len, addr_street.values())), "street,", len(addr_block), "blocks", flush=True)
     manual = load_manual()
     docs = {}
     for name in ("nag_rs.jsonl", "nag_uve.jsonl", "dnsk_rp.jsonl"):
@@ -346,13 +413,25 @@ def main():
         if t:
             links[key] = (t, "kvupi")
             continue
-        sk, num = parse_address(addr if d["src"].startswith("nag") else (d.get("settlement") or ""))
+        addr_text = addr if d["src"].startswith("nag") else (d.get("settlement") or "")
+        sk, num = parse_address(addr_text)
         if note and note[0].isdigit() and sk:
             # няколко имота с този кв. + УПИ: избери този на същата улица
             cands = [c for c in by_kv.get((district, norm_kv(kv), parse_upi(upi)[0]), []) if c["_street"] == sk]
             if len(cands) == 1:
                 links[key] = ([("p", cands[0]["id"])], "kvupi+адрес")
                 continue
+        ak, bl = parse_block(addr_text)
+        t2, how2, note2 = link_by_address_points(district, sk, num, ak, bl, addr_street, addr_block)
+        if t2:
+            # блокът е и в имот -> документът е и за имота
+            if t2[0][0] == "b":
+                pid = ".".join(t2[0][1].split(".")[:3])
+                if pid in parcels:
+                    t2 = t2 + [("p", pid)]
+            links[key] = (t2, how2)
+            continue
+        note = "; ".join(filter(None, [note, note2]))
         if sk and num and district:
             cands = by_addr.get((district, sk, num), [])
             if len(cands) == 1:

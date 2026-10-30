@@ -109,4 +109,11 @@ eq(r["object"], "„ВЪВЕЖДАНЕ НА ЕНЕРГОЕФЕКТИВНИ МЕ�
 eq("ТАЙНО ИМЕ" in json.dumps(r, ensure_ascii=False), False, "personal name must not be stored")
 eq("1234567890" in json.dumps(r, ensure_ascii=False), False, "ЕГН must not be stored")
 
+from link import parse_block, area_key  # noqa: E402
+eq(parse_block("гр. София, кв. МЛАДОСТ 4, бл. 9"), ("младост 4", "9"))
+eq(parse_block("гр. София, ул. Ж.К. ЛЕВСКИ ЗОНА Г , БЛ.36, ВХ.Д"), ("левски зона г", "36"))
+eq(parse_block("гр. София, кв. Ж.К. ДИАНАБАД, бл. 53, ет. 9"), ("дианабад", "53"))
+eq(parse_block("кв.91, гр.София, бл. 5"), (None, None), "numeric regulation quarter is not a ж.к.")
+eq(area_key("ж.к. Младост 4"), "младост 4")
+
 print(f"all {ok} checks passed")
