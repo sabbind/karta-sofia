@@ -348,6 +348,7 @@ def main():
 
     # ---------------- outputs for the map
     per_reg = defaultdict(lambda: defaultdict(list))
+    parcels_bld_docs = set()
     stage_b, stage_p = {}, {}
     for key, (targets, how) in links.items():
         d = docs[key]
@@ -359,6 +360,8 @@ def main():
             p = cid.split(".")
             per_reg[p[1]][".".join(p[2:])].append(entry)
             target = stage_b if kind == "b" else stage_p
+            if kind == "p" and not cancelled and kind_doc in ("m", "p"):
+                parcels_bld_docs.add(cid)  # документи за сграда в имота (а не само за имота/мрежите)
             if not cancelled and kind_doc == "m":  # етапът на сградата – само от основните документи
                 st = STAGE[d["src"]]
                 target[cid] = max(target.get(cid, 0) if target.get(cid, 0) != 3 else 0, st)
@@ -370,6 +373,8 @@ def main():
         bld_by_parcel[".".join(b.split(".")[:3])].append(b)
     inherited = 0
     for pid, st in stage_p.items():
+        if pid not in parcels_bld_docs:
+            continue  # само техническа инфраструктура / други към имота – не оцветяват сградите
         blds = bld_by_parcel.get(pid, [])
         if len(blds) > 1:
             # няколко сгради: не знаем за коя е документът -> сградите без собствени документи стават „има други документи“
