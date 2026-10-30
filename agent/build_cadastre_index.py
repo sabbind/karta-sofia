@@ -1,7 +1,7 @@
 """Компактен индекс на кадастъра за свързването (пуска се ръчно, когато АГКК обнови данните).
 
 Usage: python agent/build_cadastre_index.py <sofia-buildings-attributes.csv> <sofia-parcels-attributes.csv>
--> data/cadastre_buildings.txt.gz   (по един идентификатор на ред)
+-> data/cadastre_buildings.txt.gz   (идентификатор;код на предназначение;площ – по един на ред)
 -> data/cadastre_parcels.csv.gz     (id, район, квартал, УПИ, стар идентификатор/пл. №, местност, адрес)
 """
 import csv
@@ -18,7 +18,7 @@ os.makedirs(DATA, exist_ok=True)
 with open(bld_csv, encoding="utf-8-sig") as f, gzip.open(os.path.join(DATA, "cadastre_buildings.txt.gz"), "wt", encoding="utf-8") as o:
     n = 0
     for r in csv.DictReader(f):
-        o.write(r["cadnum"] + "\n")
+        o.write(f'{r["cadnum"]};{r["funccode"]};{r["area_m2"]}\n')
         n += 1
 print("buildings", n)
 

@@ -33,7 +33,16 @@ OUT = os.path.join(ROOT, "out")
 # ---------------------------------------------------------------- cadastre
 def load_cadastre():
     with gzip.open(os.path.join(DATA, "cadastre_buildings.txt.gz"), "rt", encoding="utf-8") as f:
-        buildings = {l.strip() for l in f if l.strip()}
+        buildings = {}  # id -> (код на предназначение, площ)
+        for l in f:
+            parts = l.strip().split(";")
+            if parts[0]:
+                fc = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
+                try:
+                    area = float(parts[2]) if len(parts) > 2 else 100.0
+                except ValueError:
+                    area = 100.0
+                buildings[parts[0]] = (fc, area)
     parcels, by_kv, by_addr = {}, defaultdict(list), defaultdict(list)
     with gzip.open(os.path.join(DATA, "cadastre_parcels.csv.gz"), "rt", encoding="utf-8") as f:
         for r in csv.DictReader(f):
@@ -181,6 +190,14 @@ def load_manual():
 
 
 STAGE = {"nag-rs": 1, "nag-uve": 2, "dnsk-rp": 2}
+# етапи: 0 няма, 1 РС, 2 въведена, 3 други документи,
+#        4 в имота има РС, 5 в имота има въвеждане – но имотът има няколко сгради и не е ясно за коя е
+AUX_FC = {180, 410, 475, 480}  # гаражи, допълващо застрояване, трафопостове/енергийни, други инфраструктурни
+
+
+def is_aux(info):
+    fc, area = info
+    return fc in AUX_FC or area < 25
 
 # ---------------------------------------------------------------- категории документи
 # 'm' основни (строеж/пристройка/надстройка на сграда и въвеждането им)
@@ -265,6 +282,14 @@ def short_issuer(s):
     return re.sub(r"\s+", " ", s).strip()
 
 
+DNSK_INDEX = "https://dnsk.bg/registri/publichen-registar-na-razresheniyata-za-polzvane-izdadeni-ot-dnsk/"
+
+
+def dnsk_year_page(d):
+    """Без PDF в регистъра на ДНСК -> линк към страницата на регистъра за годината."""
+    return f"{DNSK_INDEX}{d['year']}-g/" if d.get("src") == "dnsk-rp" and d.get("year") else None
+
+
 GRID_DX, GRID_DY = 0.003, 0.00225  # ~245 x 250 м
 
 
@@ -274,7 +299,7 @@ def write_grid(stage_b):
     if not os.path.isdir(iddir):
         return
     x0, y0 = 23.17, 42.55
-    cells = defaultdict(lambda: [0, 0, 0, 0])
+    cells = defaultdict(lambda: [0, 0, 0, 0, 0, 0])
     for fn in os.listdir(iddir):
         reg = fn[:-5]
         with open(os.path.join(iddir, fn), encoding="utf-8") as f:
@@ -286,7 +311,7 @@ def write_grid(stage_b):
             c = cells[(int((cx - x0) / GRID_DX), int((cy - y0) / GRID_DY))]
             c[stage_b.get(f"68134.{reg}.{rest}", 0)] += 1
     out = {"x0": x0, "y0": y0, "dx": GRID_DX, "dy": GRID_DY,
-           "c": [[i, j] + v for (i, j), v in sorted(cells.items())]}  # [i, j, без, РС, въведени, други]
+           "c": [[i, j] + v for (i, j), v in sorted(cells.items())]}  # [i, j, без, РС, въведени, други, имот с РС, имот с въвеждане]
     with open(os.path.join(SITE, "idx", "grid.json"), "w", encoding="utf-8") as f:
         json.dump(out, f, separators=(",", ":"))
     print("grid cells:", len(cells), flush=True)
@@ -383,7 +408,7 @@ def main():
         cancelled = "отмен" in (d.get("status") or "").lower()
         kind_doc = doc_kind(d.get("object"))
         entry = [d["src"], d.get("number"), d.get("date"), d.get("status"), short_issuer(d.get("issuer")),
-                 (d.get("object") or "")[:240], d.get("url") or d.get("pdf"), how, kind_doc]
+                 (d.get("object") or "")[:240], d.get("url") or d.get("pdf") or dnsk_year_page(d), how, kind_doc]
         for kind, cid in targets:
             p = cid.split(".")
             per_reg[p[1]][".".join(p[2:])].append(entry)
@@ -407,11 +432,25 @@ def main():
         if pid not in parcels_bld_docs:
             continue  # само техническа инфраструктура / други към имота – не оцветяват сградите
         blds = bld_by_parcel.get(pid, [])
-        if len(blds) > 1:
-            # няколко сгради: не знаем за коя е документът -> сградите без собствени документи стават „има други документи“
+        main_blds = [b for b in blds if not is_aux(buildings[b])]
+        if len(blds) > 1 and len(main_blds) == 1:
+            # една основна сграда + гаражи/трафопостове -> документът е за основната
             for b in blds:
-                if stage_b.get(b, 0) == 0:
+                if b != main_blds[0] and stage_b.get(b, 0) == 0:
                     stage_b[b] = 3
+            blds = main_blds
+        if len(blds) > 1:
+            # няколко основни сгради: не знаем за коя е документът
+            amb = {1: 4, 2: 5}.get(st, 3)
+            for b in blds:
+                cur = stage_b.get(b, 0)
+                new_st = (amb if b in main_blds else 3) if cur in (0, 3, 4, 5) else cur
+                if cur in (4, 5) and new_st in (4, 5):
+                    new_st = max(cur, new_st)
+                elif cur in (4, 5):
+                    new_st = cur
+                if new_st != cur:
+                    stage_b[b] = new_st
                     inherited += 1
                 if pid in year_p:
                     year_b[b] = max(year_b.get(b, 0), year_p[pid])

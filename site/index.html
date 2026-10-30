@@ -142,6 +142,7 @@
     <li>Приближете: сградите са оцветени по етап –
       <span class="sw" style="background:#2f9e5b"></span>въведена,
       <span class="sw" style="background:#e8892b"></span>с разрешение за строеж,
+      <span class="sw" style="background:#a6dbb9"></span><span class="sw" style="background:#f5c99c"></span>в имота има документи, но не е ясно за коя сграда,
       <span class="sw" style="background:#b9aedb"></span>други документи,
       <span class="sw" style="background:#d5d8dd"></span>няма открити.</li>
     <li>Кликнете върху сграда или имот, за да видите документите и линк към регистъра.</li>
@@ -176,20 +177,24 @@ colorExpr.push(OTHER_COLOR);
 const STAGES = [
   { st: 2, name: "Въведена в експлоатация", color: "#2f9e5b" },
   { st: 1, name: "С разрешение за строеж на сградата", color: "#e8892b" },
-  { st: 3, name: "Има други документи (преустройства, инфраструктура или само за имота)", color: "#b9aedb" },
+  { st: 5, name: "В имота има въведена сграда – не е ясно коя (няколко сгради)", color: "#a6dbb9" },
+  { st: 4, name: "В имота има разрешение за строеж – не е ясно за коя сграда", color: "#f5c99c" },
+  { st: 3, name: "Има други документи (преустройства, инфраструктура)", color: "#b9aedb" },
   { st: 0, name: "Без документи в регистрите", color: "#d5d8dd" },
 ];
-const stageExpr = ["match", ["coalesce", ["feature-state", "st"], 0], 2, STAGES[0].color, 1, STAGES[1].color, 3, STAGES[2].color, STAGES[3].color];
+const stageColor = st => STAGES.find(s => s.st === st).color;
+const stageExpr = ["match", ["coalesce", ["feature-state", "st"], 0],
+  2, stageColor(2), 1, stageColor(1), 5, stageColor(5), 4, stageColor(4), 3, stageColor(3), stageColor(0)];
 const DOC_TYPES = {
-  "nag-rs": { name: "Разрешение за строеж", color: STAGES[1].color },
-  "nag-uve": { name: "Удостоверение за въвеждане в експлоатация", color: STAGES[0].color },
-  "dnsk-rp": { name: "Разрешение за ползване (ДНСК)", color: STAGES[0].color },
+  "nag-rs": { name: "Разрешение за строеж", color: stageColor(1) },
+  "nag-uve": { name: "Удостоверение за въвеждане в експлоатация", color: stageColor(2) },
+  "dnsk-rp": { name: "Разрешение за ползване (ДНСК)", color: stageColor(2) },
 };
 const HOW = { kvupi: "свързано по квартал и УПИ", rs: "място по разрешението за строеж", uve: "място по удостоверението",
               manual: "свързано ръчно" };
 let mode = "permits";
 
-let stageOn = { 0: true, 1: true, 2: true, 3: true };
+let stageOn = { 0: true, 1: true, 2: true, 3: true, 4: true, 5: true };
 let yearFrom = 0;
 let totals = null;  // брой сгради по етап (от обзорната мрежа)
 
@@ -197,7 +202,7 @@ function renderLegend() {
   const rows = mode === "permits"
     ? STAGES.map(s => `<label class="row stage${stageOn[s.st] ? "" : " off"}"><input type="checkbox" data-st="${s.st}" ${stageOn[s.st] ? "checked" : ""} hidden>`
         + `<span class="sw" style="background:${s.color}"></span>${s.name}${totals ? `<span class="n">${fmt(totals[s.st])}</span>` : ""}</label>`).join("")
-      + `<div class="row" style="margin-top:4px"><span class="sw" style="background:${STAGES[1].color}44;border-color:${STAGES[1].color}"></span>Имот с документи – в цвета на етапа (при приближаване)</div>`
+      + `<div class="row" style="margin-top:4px"><span class="sw" style="background:${stageColor(1)}44;border-color:${stageColor(1)}"></span>Имот с документи – в цвета на етапа (при приближаване)</div>`
       + `<div class="row"><span class="sw" style="background:linear-gradient(90deg,${GRID_COLORS.join(",")})"></span>Отдалечено: брой сгради с документи (квадрат ~250 м)</div>`
     : GROUPS.map(g => `<div class="row"><span class="sw" style="background:${g.color}"></span>${g.name}</div>`).join("");
   document.getElementById("legend-rows").innerHTML = rows;
@@ -322,8 +327,8 @@ map.on("load", () => {
   fetch("idx/grid.json").then(r => r.ok ? r.json() : null).then(g => {
     if (!g) return;
     grid = g;
-    totals = { 0: 0, 1: 0, 2: 0, 3: 0 };
-    for (const c of g.c) for (let k = 0; k < 4; k++) totals[k] += c[2 + k];
+    totals = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    for (const c of g.c) for (let k = 0; k < 6; k++) totals[k] += c[2 + k] || 0;
     renderLegend(); updateGrid(); updateStats();
   }).catch(() => {});
 
@@ -348,18 +353,18 @@ let grid = null;
 function updateGrid() {
   if (!grid || !map.getSource("grid")) return;
   const { x0, y0, dx, dy } = grid;
-  const features = grid.c.map(([i, j, n0, n1, n2, n3]) => {
-    const n = [n0, n1, n2, n3];
-    const v = [1, 2, 3].reduce((a, k) => a + (stageOn[k] ? n[k] : 0), 0);
+  const features = grid.c.map(([i, j, ...n]) => {
+    const g = k => n[k] || 0;
+    const v = [1, 2, 3, 4, 5].reduce((a, k) => a + (stageOn[k] ? g(k) : 0), 0);
     const x = x0 + i * dx, y = y0 + j * dy;
-    return { type: "Feature", properties: { v, n0, n1, n2, n3 },
+    return { type: "Feature", properties: { v, n0: g(0), n1: g(1), n2: g(2), n3: g(3), n45: g(4) + g(5) },
       geometry: { type: "Polygon", coordinates: [[[x, y], [x + dx, y], [x + dx, y + dy], [x, y + dy], [x, y]]] } };
   });
   map.getSource("grid").setData({ type: "FeatureCollection", features });
 }
 function updateStats() {
   const box = document.getElementById("stats");
-  let n = [0, 0, 0, 0], approx = false;
+  let n = [0, 0, 0, 0, 0, 0], approx = false;
   if (map.getZoom() >= 15) {
     const seen = new Set();
     for (const f of map.queryRenderedFeatures({ layers: ["buildings-fill"] })) {
@@ -372,14 +377,15 @@ function updateStats() {
     const b = map.getBounds(), { x0, y0, dx, dy } = grid;
     for (const [i, j, ...v] of grid.c) {
       const x = x0 + (i + .5) * dx, y = y0 + (j + .5) * dy;
-      if (x >= b.getWest() && x <= b.getEast() && y >= b.getSouth() && y <= b.getNorth()) for (let k = 0; k < 4; k++) n[k] += v[k];
+      if (x >= b.getWest() && x <= b.getEast() && y >= b.getSouth() && y <= b.getNorth()) for (let k = 0; k < 6; k++) n[k] += v[k] || 0;
     }
   } else { box.textContent = ""; return; }
-  const all = n[0] + n[1] + n[2] + n[3];
+  const all = n.reduce((a, b) => a + b, 0);
   if (!all) { box.innerHTML = "В изгледа няма сгради от кадастъра."; return; }
-  const part = (k, label) => `<span class="dot" style="background:${STAGES.find(s => s.st === k).color}"></span><b>${fmt(n[k])}</b> ${label}`;
+  const part = (k, label, cnt = n[k]) => cnt ? `<span class="dot" style="background:${stageColor(k)}"></span><b>${fmt(cnt)}</b> ${label}` : "";
   box.innerHTML = `В изгледа${approx ? " (прибл.)" : ""}: <b>${fmt(all)}</b> сгради ·`
-    + part(2, "въведени") + part(1, "с РС") + part(3, "с други документи") + part(0, "без данни");
+    + part(2, "въведени") + part(1, "с РС") + part(5, "в имот с документи (сградата не е уточнена)", n[4] + n[5])
+    + part(3, "с други документи") + part(0, "без данни");
 }
 let statsTimer;
 map.on("moveend", () => { clearTimeout(statsTimer); statsTimer = setTimeout(updateStats, 150); });
@@ -390,7 +396,8 @@ map.on("mousemove", "grid-fill", e => {
   if (map.getZoom() > 13.3) { gridPopup.remove(); return; }
   const p = e.features[0].properties;
   gridPopup.setLngLat(e.lngLat).setHTML(
-    `<b>${fmt(p.n0 + p.n1 + p.n2 + p.n3)}</b> сгради в квадрата<br>${fmt(p.n2)} въведени · ${fmt(p.n1)} с РС · ${fmt(p.n3)} с други документи`
+    `<b>${fmt(p.n0 + p.n1 + p.n2 + p.n3 + p.n45)}</b> сгради в квадрата<br>${fmt(p.n2)} въведени · ${fmt(p.n1)} с РС`
+    + (p.n45 ? ` · ${fmt(p.n45)} в имот с документи` : "") + ` · ${fmt(p.n3)} с други документи`
     + `<br><span style="color:#5f6b7a">Кликнете, за да приближите</span>`).addTo(map);
 });
 map.on("mouseleave", "grid-fill", () => gridPopup.remove());
@@ -468,7 +475,8 @@ function docHtml(d) {
     <div><div class="t">${esc(t.name)} № ${esc(number)}</div>
     <div class="m">${esc([dt, issuer, status].filter(Boolean).join(" · "))}${HOW[how] ? " · " + esc(HOW[how]) : ""}</div>
     <div class="o">${esc(object)}</div>
-    ${url ? `<div class="m"><a href="${esc(url)}" target="_blank" rel="noopener">${src === "dnsk-rp" ? "PDF на документа" : "Документът в регистъра на НАГ"} ↗</a></div>` : ""}</div></div>`;
+    ${url ? `<div class="m"><a href="${esc(url)}" target="_blank" rel="noopener">${src !== "dnsk-rp" ? "Документът в регистъра на НАГ" : /\.pdf$/i.test(url) ? "PDF на документа"
+      : "Регистърът на ДНСК за " + (url.match(/(\d{4})-g\/?$/) || [, ""])[1] + " г. (няма сканиран документ)"} ↗</a></div>` : ""}</div></div>`;
 }
 
 async function showDocs(layer, id, token) {
@@ -504,7 +512,9 @@ async function showDocs(layer, id, token) {
     if (own.length) html += cats(own, "Документи за сградата", "Няма разрешение за строеж или въвеждане в експлоатация, издадено за самата сграда.");
     else html += `<h3>Документи за сградата (0)</h3><span class="empty">Няма документи, издадени с идентификатора на сградата.</span>`;
     if (fromParcel.length) html += `<h3>Вписани само с имота ${esc(p.slice(0, 3).join("."))} (${fromParcel.length})</h3>`
-      + `<div class="m" style="margin-bottom:4px">Документът сочи имота, а не сградата – най-вероятно се отнася за нея.</div>`
+      + `<div class="m" style="margin-bottom:4px">${[4, 5].includes(map.getFeatureState(ref("buildings", id)).st)
+          ? "Документът сочи само имота, а в него има няколко сгради – не е ясно за коя се отнася."
+          : "Документът сочи имота, а не сградата – най-вероятно се отнася за нея."}</div>`
       + fromParcel.map(docHtml).join("");
     if (rest) html += `<div class="m" style="margin-top:8px">В имота има още ${rest} документа за техническа инфраструктура и други – кликнете върху имота.</div>`;
   } else {
