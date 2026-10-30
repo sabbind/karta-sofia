@@ -265,6 +265,33 @@ def short_issuer(s):
     return re.sub(r"\s+", " ", s).strip()
 
 
+GRID_DX, GRID_DY = 0.003, 0.00225  # ~245 x 250 м
+
+
+def write_grid(stage_b):
+    """Обзорна мрежа за малките мащаби: брой сгради по етап във всяка клетка ~250 м."""
+    iddir = os.path.join(SITE, "idx", "id")
+    if not os.path.isdir(iddir):
+        return
+    x0, y0 = 23.17, 42.55
+    cells = defaultdict(lambda: [0, 0, 0, 0])
+    for fn in os.listdir(iddir):
+        reg = fn[:-5]
+        with open(os.path.join(iddir, fn), encoding="utf-8") as f:
+            shard = json.load(f)
+        for rest, (bb, kind) in shard.items():
+            if kind != "b":
+                continue
+            cx, cy = (bb[0] + bb[2]) / 2, (bb[1] + bb[3]) / 2
+            c = cells[(int((cx - x0) / GRID_DX), int((cy - y0) / GRID_DY))]
+            c[stage_b.get(f"68134.{reg}.{rest}", 0)] += 1
+    out = {"x0": x0, "y0": y0, "dx": GRID_DX, "dy": GRID_DY,
+           "c": [[i, j] + v for (i, j), v in sorted(cells.items())]}  # [i, j, без, РС, въведени, други]
+    with open(os.path.join(SITE, "idx", "grid.json"), "w", encoding="utf-8") as f:
+        json.dump(out, f, separators=(",", ":"))
+    print("grid cells:", len(cells), flush=True)
+
+
 def main():
     buildings, parcels, by_kv, by_addr = load_cadastre()
     manual = load_manual()
@@ -350,6 +377,7 @@ def main():
     per_reg = defaultdict(lambda: defaultdict(list))
     parcels_bld_docs = set()
     stage_b, stage_p = {}, {}
+    year_b, year_p = {}, {}  # година на най-новия валиден документ (за филтъра по година)
     for key, (targets, how) in links.items():
         d = docs[key]
         cancelled = "отмен" in (d.get("status") or "").lower()
@@ -360,6 +388,9 @@ def main():
             p = cid.split(".")
             per_reg[p[1]][".".join(p[2:])].append(entry)
             target = stage_b if kind == "b" else stage_p
+            yt = year_b if kind == "b" else year_p
+            if not cancelled and (d.get("date") or "")[:4].isdigit():
+                yt[cid] = max(yt.get(cid, 0), int(d["date"][:4]))
             if kind == "p" and not cancelled and kind_doc in ("m", "p"):
                 parcels_bld_docs.add(cid)  # документи за сграда в имота (а не само за имота/мрежите)
             if not cancelled and kind_doc == "m":  # етапът на сградата – само от основните документи
@@ -382,10 +413,14 @@ def main():
                 if stage_b.get(b, 0) == 0:
                     stage_b[b] = 3
                     inherited += 1
+                if pid in year_p:
+                    year_b[b] = max(year_b.get(b, 0), year_p[pid])
             continue
         if len(blds) != 1:
             continue
         b = blds[0]
+        if pid in year_p:
+            year_b[b] = max(year_b.get(b, 0), year_p[pid])
         cur = stage_b.get(b, 0)
         if cur in (1, 2):
             new_st = max(cur, st) if st in (1, 2) else cur
@@ -406,7 +441,8 @@ def main():
         with open(os.path.join(ddir, f"{reg}.json"), "w", encoding="utf-8") as f:
             json.dump(items, f, ensure_ascii=False, separators=(",", ":"))
     with open(os.path.join(SITE, "idx", "status.json"), "w", encoding="utf-8") as f:
-        json.dump({"b": stage_b, "p": stage_p}, f, separators=(",", ":"))
+        json.dump({"b": stage_b, "p": stage_p, "yb": year_b, "yp": year_p}, f, separators=(",", ":"))
+    write_grid(stage_b)
 
     # ---------------- unlinked table (за ръчно свързване)
     os.makedirs(OUT, exist_ok=True)

@@ -68,11 +68,30 @@
   #legend .mode label:has(input:focus-visible) { outline: 2px solid var(--accent); }
   #panel .close { position: absolute; top: 8px; right: 10px; border: 0; background: none; font-size: 20px; cursor: pointer; color: var(--muted); }
   #panel .hint { color: var(--muted); font-size: 12.5px; margin-top: 8px; }
+  #stats { margin-top: 8px; font-size: 12px; color: var(--muted); line-height: 1.5; }
+  #stats b { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+  #stats .dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin: 0 3px 0 6px; vertical-align: 0; }
+  #legend .stage { cursor: pointer; user-select: none; }
+  #legend .stage input { margin: 0; flex: none; }
+  #legend .stage .n { margin-left: auto; padding-left: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  #legend .stage.off { opacity: .45; }
+  #legend .sec { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--line); }
+  #legend select { font: inherit; font-size: 12px; padding: 2px 4px; border: 1px solid var(--line); border-radius: 5px; background: #fff; }
+  #legend .note { color: var(--muted); font-size: 11.5px; max-width: 300px; }
+  #intro { bottom: 28px; left: 50%; transform: translateX(-50%); width: 460px; max-width: calc(100% - 24px); padding: 12px 16px; font-size: 13px; display: none; }
+  #intro.show { display: block; }
+  #intro h2 { margin: 0 0 6px; font-size: 14px; }
+  #intro ul { margin: 0; padding-left: 18px; }
+  #intro li { margin: 2px 0; }
+  #intro .sw { display: inline-block; width: 11px; height: 11px; border-radius: 2px; vertical-align: -1px; margin-right: 3px; border: 1px solid rgba(0,0,0,.15); }
+  #intro button { margin-top: 8px; padding: 5px 14px; font: inherit; border: 0; border-radius: 6px; background: var(--accent); color: #fff; cursor: pointer; }
+  .maplibregl-popup-content { font-size: 12.5px; padding: 8px 10px; }
   #msg { top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 16px 18px; max-width: 420px; display: none; }
   #msg.show { display: block; }
   @media (max-width: 600px) {
     #panel { top: auto; bottom: 12px; right: 12px; left: 12px; width: auto; max-height: 50%; }
     #legend { display: none; }
+    #intro { bottom: auto; top: 140px; }
   }
 </style>
 </head>
@@ -89,6 +108,7 @@
     <button id="q-clear" type="button" aria-label="Изчисти" hidden>×</button>
     <ul id="results" role="listbox"></ul>
   </div>
+  <div id="stats" aria-live="polite"></div>
 </div>
 
 <details id="legend" class="card" open>
@@ -98,7 +118,14 @@
     <label><input type="radio" name="mode" id="mode-use" value="use"><span>Предназначение</span></label>
   </div>
   <div id="legend-rows"></div>
-  <label class="row" style="margin-top:6px;cursor:pointer"><input type="checkbox" id="color-parcels" checked> Оцветявай и имотите</label>
+  <div id="permit-opts" class="sec">
+    <label class="row" style="cursor:pointer"><input type="checkbox" id="color-parcels" checked> Оцветявай и имотите</label>
+    <label class="row">Документи от година
+      <select id="year-from" aria-label="Документи от година">
+        <option value="0">всички</option><option>2010</option><option>2015</option><option>2020</option><option>2023</option><option>2025</option>
+      </select></label>
+    <div class="note">Кликнете върху етап, за да го скриете или покажете.</div>
+  </div>
 </details>
 
 <aside id="panel" class="card" aria-live="polite">
@@ -107,6 +134,21 @@
 </aside>
 
 <div id="msg" class="card"></div>
+
+<div id="intro" class="card" role="dialog" aria-labelledby="intro-h">
+  <h2 id="intro-h">Как се чете картата</h2>
+  <ul>
+    <li>Отдалечено: <b>квадратчетата</b> показват къде има сгради с документи – колкото по-тъмно, толкова повече.</li>
+    <li>Приближете: сградите са оцветени по етап –
+      <span class="sw" style="background:#2f9e5b"></span>въведена,
+      <span class="sw" style="background:#e8892b"></span>с разрешение за строеж,
+      <span class="sw" style="background:#b9aedb"></span>други документи,
+      <span class="sw" style="background:#d5d8dd"></span>няма открити.</li>
+    <li>Кликнете върху сграда или имот, за да видите документите и линк към регистъра.</li>
+    <li>Търсете по адрес или кадастрален идентификатор горе вляво.</li>
+  </ul>
+  <button type="button" id="intro-ok">Разбрах</button>
+</div>
 
 <script>
 // ===================== НАСТРОЙКИ =====================
@@ -147,27 +189,48 @@ const HOW = { kvupi: "свързано по квартал и УПИ", rs: "мя
               manual: "свързано ръчно" };
 let mode = "permits";
 
+let stageOn = { 0: true, 1: true, 2: true, 3: true };
+let yearFrom = 0;
+let totals = null;  // брой сгради по етап (от обзорната мрежа)
+
 function renderLegend() {
   const rows = mode === "permits"
-    ? STAGES.map(s => `<div class="row"><span class="sw" style="background:${s.color}"></span>${s.name}</div>`).join("")
-      + `<div class="row" style="margin-top:4px"><span class="sw" style="background:${STAGES[1].color}44"></span>Имот с документи – в цвета на етапа (при приближаване)</div>`
+    ? STAGES.map(s => `<label class="row stage${stageOn[s.st] ? "" : " off"}"><input type="checkbox" data-st="${s.st}" ${stageOn[s.st] ? "checked" : ""} hidden>`
+        + `<span class="sw" style="background:${s.color}"></span>${s.name}${totals ? `<span class="n">${fmt(totals[s.st])}</span>` : ""}</label>`).join("")
+      + `<div class="row" style="margin-top:4px"><span class="sw" style="background:${STAGES[1].color}44;border-color:${STAGES[1].color}"></span>Имот с документи – в цвета на етапа (при приближаване)</div>`
+      + `<div class="row"><span class="sw" style="background:linear-gradient(90deg,${GRID_COLORS.join(",")})"></span>Отдалечено: брой сгради с документи (квадрат ~250 м)</div>`
     : GROUPS.map(g => `<div class="row"><span class="sw" style="background:${g.color}"></span>${g.name}</div>`).join("");
   document.getElementById("legend-rows").innerHTML = rows;
+  document.getElementById("permit-opts").style.display = mode === "permits" ? "" : "none";
+  document.querySelectorAll("#legend .stage input").forEach(i => i.addEventListener("change", e => {
+    stageOn[e.target.dataset.st] = e.target.checked; applyMode(); updateGrid(); updateStats();
+  }));
 }
+const GRID_COLORS = ["#dbe8f5", "#a9cbe6", "#6aa6d3", "#2f78b7", "#0f4a8a"];
 renderLegend();
 
 let colorParcels = true;
+// цвят по етап + филтрите (скрит етап или по-стар документ -> блед)
+const ST = ["coalesce", ["feature-state", "st"], 0];
+function permitHidden() {
+  return ["any",
+    ["!", ["in", ST, ["literal", Object.keys(stageOn).filter(k => stageOn[k]).map(Number)]]],
+    ...(yearFrom ? [["all", [">", ST, 0], ["<", ["coalesce", ["feature-state", "yr"], 0], yearFrom]]] : [])];
+}
+function permitColor() { return ["case", permitHidden(), "#eef0f2", stageExpr]; }
 function applyMode() {
   if (!map.getLayer("buildings-fill")) return;
   const permits = mode === "permits";
-  const hasDocs = [">", ["coalesce", ["feature-state", "st"], 0], 0];
   const sel = ["boolean", ["feature-state", "selected"], false];
-  map.setPaintProperty("buildings-fill", "fill-color", ["case", sel, "#1f5fae", permits ? stageExpr : colorExpr]);
+  const pc = permitColor();
+  const hasDocs = ["all", [">", ST, 0], ["!", permitHidden()]];
+  map.setPaintProperty("buildings-fill", "fill-color", ["case", sel, "#1f5fae", permits ? pc : colorExpr]);
+  if (map.getLayer("grid-fill")) map.setLayoutProperty("grid-fill", "visibility", permits ? "visible" : "none");
   map.setPaintProperty("parcels-fill", "fill-opacity",
     ["case", sel, 0.18, permits && colorParcels ? ["case", hasDocs, 0.35, 0] : 0]);
-  map.setPaintProperty("parcels-fill", "fill-color", ["case", sel, "#1f5fae", stageExpr]);
+  map.setPaintProperty("parcels-fill", "fill-color", ["case", sel, "#1f5fae", pc]);
   map.setPaintProperty("parcels-line", "line-color",
-    ["case", sel, "#1f5fae", permits && colorParcels ? ["case", hasDocs, stageExpr, "#7a6f9b"] : "#7a6f9b"]);
+    ["case", sel, "#1f5fae", permits && colorParcels ? ["case", hasDocs, pc, "#7a6f9b"] : "#7a6f9b"]);
   map.setPaintProperty("parcels-line", "line-width",
     ["case", sel, 2.5, permits && colorParcels ? ["case", hasDocs, ["interpolate", ["linear"], ["zoom"], 14, 1, 18, 2.5],
       ["interpolate", ["linear"], ["zoom"], 15, 0.4, 18, 1.2]] : ["interpolate", ["linear"], ["zoom"], 15, 0.4, 18, 1.2]]);
@@ -176,6 +239,7 @@ function applyMode() {
   document.getElementById("color-parcels").disabled = !permits;
   renderLegend();
 }
+document.getElementById("year-from").addEventListener("change", e => { yearFrom = +e.target.value; applyMode(); });
 document.getElementById("color-parcels").addEventListener("change", e => { colorParcels = e.target.checked; applyMode(); });
 document.querySelectorAll('input[name="mode"]').forEach(r => r.addEventListener("change", e => { mode = e.target.value; applyMode(); }));
 
@@ -186,7 +250,7 @@ const map = new maplibregl.Map({
   container: "map",
   style: BASEMAP_STYLE,
   center: [23.3219, 42.6977],
-  zoom: 14,
+  zoom: 12,
   minZoom: 10,
   maxZoom: 20,
   hash: true,
@@ -233,7 +297,7 @@ map.on("load", () => {
     id: "buildings-fill", type: "fill", source: "cad", "source-layer": "buildings",
     paint: {
       "fill-color": ["case", ["boolean", ["feature-state", "selected"], false], "#1f5fae", colorExpr],
-      "fill-opacity": ["interpolate", ["linear"], ["zoom"], 12, 0.75, 16, 0.85],
+      "fill-opacity": ["interpolate", ["linear"], ["zoom"], 12.5, 0, 13.5, 0.75, 16, 0.85],
     },
   }, firstSymbol);
   map.addLayer({
@@ -245,12 +309,32 @@ map.on("load", () => {
     paint: { "line-color": "#1d232b", "line-width": ["case", ["boolean", ["feature-state", "hover"], false], 2, 0] },
   }, firstSymbol);
 
+  // обзорна мрежа (малки мащаби): къде има сгради с документи
+  map.addSource("grid", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+  map.addLayer({
+    id: "grid-fill", type: "fill", source: "grid", maxzoom: 14,
+    paint: {
+      "fill-color": ["step", ["get", "v"], "#e3e5e8", 1, GRID_COLORS[0], 5, GRID_COLORS[1], 15, GRID_COLORS[2], 40, GRID_COLORS[3], 100, GRID_COLORS[4]],
+      "fill-opacity": ["interpolate", ["linear"], ["zoom"], 12.5, 0.8, 13.6, 0],
+      "fill-outline-color": "rgba(255,255,255,0.6)",
+    },
+  }, firstSymbol);
+  fetch("idx/grid.json").then(r => r.ok ? r.json() : null).then(g => {
+    if (!g) return;
+    grid = g;
+    totals = { 0: 0, 1: 0, 2: 0, 3: 0 };
+    for (const c of g.c) for (let k = 0; k < 4; k++) totals[k] += c[2 + k];
+    renderLegend(); updateGrid(); updateStats();
+  }).catch(() => {});
+
   applyMode();
   // етап на всяка сграда/имот (от агента) -> feature-state "st"
   fetch("idx/status.json").then(r => r.ok ? r.json() : null).then(st => {
     if (!st) return;
     for (const [id, v] of Object.entries(st.b || {})) map.setFeatureState(ref("buildings", id), { st: v });
     for (const [id, v] of Object.entries(st.p || {})) map.setFeatureState(ref("parcels", id), { st: v });
+    for (const [id, v] of Object.entries(st.yb || {})) map.setFeatureState(ref("buildings", id), { yr: v });
+    for (const [id, v] of Object.entries(st.yp || {})) map.setFeatureState(ref("parcels", id), { yr: v });
   }).catch(() => {});
 
   // проверка дали файлът се зарежда (напр. грешен адрес или CORS)
@@ -258,6 +342,69 @@ map.on("load", () => {
     showMsg(`<b>Данните не се зареждат.</b><br>Проверете адреса на файла (PMTILES_URL) и CORS настройката на R2.<br><small>${err}</small>`);
   });
 });
+
+// ---------- обзорна мрежа и брояч на видимата област
+let grid = null;
+function updateGrid() {
+  if (!grid || !map.getSource("grid")) return;
+  const { x0, y0, dx, dy } = grid;
+  const features = grid.c.map(([i, j, n0, n1, n2, n3]) => {
+    const n = [n0, n1, n2, n3];
+    const v = [1, 2, 3].reduce((a, k) => a + (stageOn[k] ? n[k] : 0), 0);
+    const x = x0 + i * dx, y = y0 + j * dy;
+    return { type: "Feature", properties: { v, n0, n1, n2, n3 },
+      geometry: { type: "Polygon", coordinates: [[[x, y], [x + dx, y], [x + dx, y + dy], [x, y + dy], [x, y]]] } };
+  });
+  map.getSource("grid").setData({ type: "FeatureCollection", features });
+}
+function updateStats() {
+  const box = document.getElementById("stats");
+  let n = [0, 0, 0, 0], approx = false;
+  if (map.getZoom() >= 15) {
+    const seen = new Set();
+    for (const f of map.queryRenderedFeatures({ layers: ["buildings-fill"] })) {
+      if (seen.has(f.id)) continue;
+      seen.add(f.id);
+      n[map.getFeatureState(ref("buildings", f.id)).st || 0]++;
+    }
+  } else if (grid) {
+    approx = true;
+    const b = map.getBounds(), { x0, y0, dx, dy } = grid;
+    for (const [i, j, ...v] of grid.c) {
+      const x = x0 + (i + .5) * dx, y = y0 + (j + .5) * dy;
+      if (x >= b.getWest() && x <= b.getEast() && y >= b.getSouth() && y <= b.getNorth()) for (let k = 0; k < 4; k++) n[k] += v[k];
+    }
+  } else { box.textContent = ""; return; }
+  const all = n[0] + n[1] + n[2] + n[3];
+  if (!all) { box.innerHTML = "В изгледа няма сгради от кадастъра."; return; }
+  const part = (k, label) => `<span class="dot" style="background:${STAGES.find(s => s.st === k).color}"></span><b>${fmt(n[k])}</b> ${label}`;
+  box.innerHTML = `В изгледа${approx ? " (прибл.)" : ""}: <b>${fmt(all)}</b> сгради ·`
+    + part(2, "въведени") + part(1, "с РС") + part(3, "с други документи") + part(0, "без данни");
+}
+let statsTimer;
+map.on("moveend", () => { clearTimeout(statsTimer); statsTimer = setTimeout(updateStats, 150); });
+map.on("idle", () => { if (map.getZoom() >= 15) updateStats(); });
+
+const gridPopup = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 8 });
+map.on("mousemove", "grid-fill", e => {
+  if (map.getZoom() > 13.3) { gridPopup.remove(); return; }
+  const p = e.features[0].properties;
+  gridPopup.setLngLat(e.lngLat).setHTML(
+    `<b>${fmt(p.n0 + p.n1 + p.n2 + p.n3)}</b> сгради в квадрата<br>${fmt(p.n2)} въведени · ${fmt(p.n1)} с РС · ${fmt(p.n3)} с други документи`
+    + `<br><span style="color:#5f6b7a">Кликнете, за да приближите</span>`).addTo(map);
+});
+map.on("mouseleave", "grid-fill", () => gridPopup.remove());
+
+// ---------- упътване при първо отваряне
+(function () {
+  let seen = false;
+  try { seen = localStorage.getItem("intro-seen") === "1"; } catch (e) { /* без localStorage */ }
+  const box = document.getElementById("intro");
+  if (!seen) box.classList.add("show");
+  const hide = () => { box.classList.remove("show"); try { localStorage.setItem("intro-seen", "1"); } catch (e) { /* */ } };
+  document.getElementById("intro-ok").addEventListener("click", hide);
+  map.once("click", hide);
+})();
 
 let hoverId = null, selected = null;
 const ref = (layer, id) => ({ source: "cad", sourceLayer: layer, id });
@@ -383,6 +530,7 @@ function openFeature(layer, f) {
 }
 
 map.on("click", e => {
+  if (map.getZoom() < 13.3) { map.easeTo({ center: e.lngLat, zoom: 15.5 }); return; }  // обзор -> приближаване
   const b = map.queryRenderedFeatures(e.point, { layers: ["buildings-fill"] })[0];
   const p = b ? null : map.queryRenderedFeatures(e.point, { layers: ["parcels-fill"] })[0];
   if (b) openFeature("buildings", b); else if (p) openFeature("parcels", p);
