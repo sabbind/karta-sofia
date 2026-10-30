@@ -58,6 +58,7 @@
   .doc .t { font-weight: 600; }
   .doc .m { color: var(--muted); font-size: 12.5px; }
   .doc .o { margin-top: 2px; }
+  .doc .note { display: inline-block; margin-top: 2px; padding: 0 6px; border-radius: 4px; background: #f1eefa; color: #5b4f86; font-size: 11.5px; }
   .doc a { color: var(--accent); }
   .doc.cancelled .t, .doc.cancelled .o { text-decoration: line-through; color: var(--muted); }
   #legend .mode { display: flex; gap: 4px; margin: 6px 0 8px; }
@@ -466,15 +467,16 @@ function loadDocs(reg) {
   return docCache[reg];
 }
 
-function docHtml(d) {
-  const [src, number, date, status, issuer, object, url, how, , refs, via] = d;
+function docHtml(d, note) {
+  const [src, number, date, status, issuer, object, url, how, , refs] = d;
   const t = DOC_TYPES[src] || { name: src, color: "#999" };
   const cancelled = /отмен/i.test(status || "");
   const dt = date ? date.split("-").reverse().join(".") : "";
   return `<div class="doc${cancelled ? " cancelled" : ""}">
     <span class="dot" style="background:${t.color}"></span>
     <div><div class="t">${esc(t.name)} № ${esc(number)}</div>
-    <div class="m">${esc([dt, issuer, status].filter(Boolean).join(" · "))}${HOW[how] ? " · " + esc(HOW[how]) : ""}${via === "имот" ? " · вписан с имота (единствената сграда в него)" : ""}</div>
+    <div class="m">${esc([dt, issuer, status].filter(Boolean).join(" · "))}${HOW[how] ? " · " + esc(HOW[how]) : ""}</div>
+    ${note ? `<div class="note">${esc(note)}</div>` : ""}
     <div class="o">${esc(object)}</div>
     ${refs ? `<div class="m">${src === "nag-uve" ? "По" : "Въведено с"} ${refs.map(([l, u]) =>
       u ? `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(l)}</a>` : esc(l)).join(", ")}</div>` : ""}
@@ -486,52 +488,39 @@ async function showDocs(layer, id, token) {
   const p = id.split(".");
   const items = await loadDocs(p[1]);
   if (token !== panelToken) return;
-  const parcelRest = p[2];
-  const prep = arr => { const seen = new Set();
-    return (arr || []).filter(d => { const k = d[0] + d[1]; if (seen.has(k)) return false; seen.add(k); return true; })
-      .sort((a, b) => (b[2] || "").localeCompare(a[2] || "")); };
   const box = document.getElementById("permits");
   if (!box) return;
-  // d[8]: m – основни, p – преустройства и промени в сградата, u – техническа инфраструктура, o – други
-  const kind = d => d[8] || "m";
-  const group = (title, arr, open) => arr.length
-    ? `<details class="docgroup"${open ? " open" : ""}><summary>${title} (${arr.length})</summary>${arr.map(docHtml).join("")}</details>` : "";
-  const cats = (list, mainTitle, emptyMain) => {
-    const by = k => list.filter(d => kind(d) === k);
-    const main = by("m");
-    let h = `<h3>${mainTitle} (${main.length})</h3>`;
-    h += main.length ? main.map(docHtml).join("") : `<span class="empty">${emptyMain}</span>`;
-    h += group("Преустройства и промени в сградата", by("p"));
-    h += group("Техническа инфраструктура (ел., топло, газ, ВиК, мобилни оператори…)", by("u"));
-    h += group("Други (огради, гаражи, допълващо застрояване…)", by("o"));
-    return h;
-  };
-  const parcelDocs = prep(items[parcelRest]);
-  let html = "";
+  const parcelRest = p[2];
+  const kind = d => d[8] || "m";  // m – строеж/въвеждане, p – преустройства, u – техн. инфраструктура, o – други
+  // всички документи, които се отнасят до сградата/имота, с бележка откъде идват
+  let list = [];
   if (layer === "buildings") {
-    const own = prep(items[p.slice(2).join(".")]);
-    const fromParcel = parcelDocs.filter(d => kind(d) === "m" || kind(d) === "p");
-    const rest = parcelDocs.length - fromParcel.length;
-    if (own.length) html += cats(own, "Документи за сградата", "Няма разрешение за строеж или въвеждане в експлоатация, издадено за самата сграда.");
-    else html += `<h3>Документи за сградата (0)</h3><span class="empty">Няма документи, издадени с идентификатора на сградата.</span>`;
-    if (fromParcel.length) html += `<h3>Вписани само с имота ${esc(p.slice(0, 3).join("."))} (${fromParcel.length})</h3>`
-      + `<div class="m" style="margin-bottom:4px">${[4, 5].includes(map.getFeatureState(ref("buildings", id)).st)
-          ? "Документът сочи само имота, а в него има няколко сгради – не е ясно за коя се отнася."
-          : "Документът сочи имота, а не сградата – най-вероятно се отнася за нея."}</div>`
-      + fromParcel.map(docHtml).join("");
-    if (rest) html += `<div class="m" style="margin-top:8px">В имота има още ${rest} документа за техническа инфраструктура и други – кликнете върху имота.</div>`;
+    const multi = [4, 5].includes(map.getFeatureState(ref("buildings", id)).st)
+      || Object.keys(items).filter(r => r.startsWith(parcelRest + ".")).length > 1;
+    for (const d of items[p.slice(2).join(".")] || []) list.push([d, d[10] === "имот" ? "вписан с имота – единствената сграда в него" : ""]);
+    for (const d of items[parcelRest] || [])
+      list.push([d, (kind(d) === "m" || kind(d) === "p") && multi
+        ? "вписан само с имота – в него има няколко сгради, не е ясно за коя е" : "вписан с имота"]);
   } else {
-    const blds = Object.keys(items).filter(r => r.startsWith(parcelRest + ".")).sort();
-    html += cats(parcelDocs, "Документи за имота", blds.length
-      ? "Документите за строеж и въвеждане са при сградите – вижте по-долу."
-      : "Няма разрешение за строеж или въвеждане в експлоатация, вписано с идентификатора на имота.");
-    for (const r of blds) {
-      const arr = prep(items[r]);
-      if (arr.length) html += group(`Сграда 68134.${esc(p[1])}.${esc(r)}`, arr, blds.length === 1);
-    }
-    if (blds.length) html = html.replace(/(<details class="docgroup"><summary>Сграда)/, `<h3>Документи за сградите в имота</h3>$1`);
+    for (const d of items[parcelRest] || []) list.push([d, ""]);
+    for (const r of Object.keys(items).filter(r => r.startsWith(parcelRest + ".")).sort())
+      for (const d of items[r]) list.push([d, `сграда 68134.${p[1]}.${r}`]);
   }
-  box.innerHTML = html || `<span class="empty">Няма свързани документи от регистрите на НАГ и ДНСК.</span>`;
+  const seen = new Set();
+  list = list.filter(([d]) => { const k = d[0] + d[1]; if (seen.has(k)) return false; seen.add(k); return true; })
+             .sort((a, b) => (b[0][2] || "").localeCompare(a[0][2] || ""));
+  if (!list.length) { box.innerHTML = `<span class="empty">Няма свързани документи от регистрите на НАГ и ДНСК.</span>`; return; }
+  const by = k => list.filter(([d]) => kind(d) === k);
+  const render = arr => arr.map(([d, note]) => docHtml(d, note)).join("");
+  const group = (title, arr) => arr.length
+    ? `<details class="docgroup"><summary>${title} (${arr.length})</summary>${render(arr)}</details>` : "";
+  const main = by("m");
+  let html = `<h3>Строеж и въвеждане в експлоатация (${main.length})</h3>`
+    + (main.length ? render(main) : `<span class="empty">Няма открито разрешение за строеж или въвеждане в експлоатация.</span>`);
+  html += group("Преустройства и промяна на предназначението", by("p"));
+  html += group("Техническа инфраструктура (ел., топло, газ, ВиК, мобилни оператори…)", by("u"));
+  html += group("Други (огради, гаражи, допълващо застрояване…)", by("o"));
+  box.innerHTML = html;
 }
 
 let panelToken = 0;
