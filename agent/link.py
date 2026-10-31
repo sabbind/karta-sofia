@@ -240,6 +240,64 @@ def link_by_kv_upi(district, kv, upi, by_kv):
     return [], note
 
 
+def loc_key(s):
+    """Местност -> множество от думи: 'м. Лозенец ІІ-ра част' ~ 'ЛОЗЕНЕЦ - II ЧАСТ'."""
+    k = (s or "").lower().translate(str.maketrans({"і": "i", "х": "x"}))
+    k = re.sub(r"\b(?:м|местност|жил|гр|ж|к|кв|с|и)\.|\bместност\b|\bчаст\b", " ", k)
+    k = re.sub(r"(\b[ivx]+|\d+)\s*-?\s*(?:ва|ра|та|ма)\b", r"\1", k)
+    k = re.sub(r"[\"„“”'«».,\-–/()]", " ", k)
+    return {w for w in k.split() if len(w) > 1 or w in "ivx" or w.isdigit()}
+
+
+def loc_similar(a, b):
+    a, b = loc_key(a), loc_key(b)
+    return bool(a and b) and len(a & b) / min(len(a), len(b)) >= 0.6
+
+
+def load_upi():
+    """Слоят с УПИ на ГИС – София (data/upi.csv.gz) -> (район, квартал, УПИ) -> [(пл. номера, местност, имоти)]."""
+    idx = defaultdict(list)
+    path = os.path.join(DATA, "upi.csv.gz")
+    if not os.path.exists(path):
+        return idx
+    with gzip.open(path, "rt", encoding="utf-8") as f:
+        for r in csv.DictReader(f, delimiter=";"):
+            if not r["parcels"]:
+                continue
+            kv = norm_kv(r["kv"])
+            roman, nums = parse_upi(r["upi"])
+            if not (kv and roman):
+                continue
+            shares = [(p, float(v)) for p, v in (x.split(":") for x in r["parcels"].split("|"))]
+            rec = (set(nums), r["locality"], shares, r["upi"])
+            for reg in r["region"].split(","):
+                idx[(reg.strip(), kv, roman)].append(rec)
+    return idx
+
+
+def link_by_upi_layer(district, kv, upi, locality, upi_idx, parcels):
+    """-> (targets, note). Квартал + УПИ (+ пл. номер, + местност) в регулацията -> имотите под това УПИ."""
+    kvn = norm_kv(kv)
+    roman, nums = parse_upi(upi)
+    if not (district and kvn and roman):
+        return [], None
+    cands = upi_idx.get((district, kvn, roman), [])
+    if len(cands) > 1 and locality:
+        same = [c for c in cands if loc_similar(c[1], locality)]
+        cands = same or cands
+    if nums and len(cands) > 1:
+        conf = [c for c in cands if c[0] & set(nums)]
+        cands = conf or cands
+    sets = {tuple(p for p, sh in c[2] if sh >= 0.3) or (c[2][0][0],) for c in cands}
+    if len(sets) == 1:
+        pids = [p for p in sets.pop() if p in parcels]
+        if pids:
+            return [("p", p) for p in pids], None
+    if len(sets) > 1:
+        return [], f"{len(sets)} УПИ {roman} в кв. {kvn} (р-н {district}) – различни местности"
+    return [], None
+
+
 def load_manual():
     path = os.path.join(DATA, "manual_links.csv")
     out = {}
@@ -385,6 +443,8 @@ def write_grid(stage_b):
 def main():
     buildings, parcels, by_kv, by_addr = load_cadastre()
     addr_street, addr_block = load_addresses()
+    upi_idx = load_upi()
+    print("УПИ (регулация):", sum(map(len, upi_idx.values())), flush=True)
     print("address points:", sum(map(len, addr_street.values())), "street,", len(addr_block), "blocks", flush=True)
     manual = load_manual()
     docs = {}
@@ -413,6 +473,14 @@ def main():
         if t:
             links[key] = (t, "kvupi")
             continue
+        if not place and d["src"] == "dnsk-rp":
+            m = re.search(r"\bм(?:естност)?\.?\s*[\"„“]?([^,;\"“”]+)", d.get("settlement") or "")
+            place = m.group(1) if m else None
+        t, note_u = link_by_upi_layer(district, kv, upi, place, upi_idx, parcels)
+        if t:
+            links[key] = (t, "упи")
+            continue
+        note = "; ".join(filter(None, [note, note_u]))
         addr_text = addr if d["src"].startswith("nag") else (d.get("settlement") or "")
         sk, num = parse_address(addr_text)
         if note and note[0].isdigit() and sk:
