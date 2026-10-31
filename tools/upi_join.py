@@ -1,8 +1,10 @@
 """Слоят с УПИ на ГИС – София (shp, BGS2005, cp1251) -> кои кадастрални имоти покрива всяко УПИ.
 
-Usage: python tools/upi_join.py <upi.shp> <папка с имотите>
+Usage: python tools/upi_join.py <upi.shp> <папка с имотите> <папка със сградите>
 -> data/upi.csv.gz
-   region; kv; upi; locality; purpose; parcels  (parcels = "68134.x.y:дял|…", дял от площта на УПИ)
+   id; region; kv; upi; locality; purpose; parcels; buildings
+   parcels   = "68134.x.y:дял|…" – дял от площта на УПИ
+   buildings = "68134.x.y.z|…"   – сгради, чийто център е в УПИ
 
 Дяловете се смятат с равномерна мрежа от точки вътре в УПИ (до ~60 точки).
 """
@@ -57,14 +59,28 @@ def samples(rings, target=60):
 
 
 def main():
-    shp, pdir = sys.argv[1:3]
+    shp, pdir, bdir = sys.argv[1:4]
     parcels = load_layer(pdir)
+    bpolys, bindex = load_layer(bdir)
+    # център на всяка сграда (средна точка на върховете, после проверка дали е вътре)
+    bcent = []
+    for cid, bb, g in bpolys:
+        ring = g[0]
+        cx, cy = sum(p[0] for p in ring) / len(ring), sum(p[1] for p in ring) / len(ring)
+        if not pip(cx, cy, g):
+            cx, cy = samples(g, 8)[0]
+        bcent.append((cid, cx, cy))
+    CELL = 100.0
+    from collections import defaultdict
+    bgrid = defaultdict(list)
+    for k, (cid, cx, cy) in enumerate(bcent):
+        bgrid[(int(cx // CELL), int(cy // CELL))].append(k)
     geoms = read_polygons(shp)
     out = os.path.join(HERE, "..", "data", "upi.csv.gz")
     n = with_p = 0
     with gzip.open(out, "wt", encoding="utf-8", newline="") as o:
         w = csv.writer(o, delimiter=";")
-        w.writerow(["region", "kv", "upi", "locality", "purpose", "parcels"])
+        w.writerow(["id", "region", "kv", "upi", "locality", "purpose", "parcels", "buildings"])
         for r, g in zip(iter_dbf(shp[:-4] + ".dbf"), geoms):
             if not g or not r["UPI"] or not r["QUARTER"]:
                 continue
@@ -73,8 +89,18 @@ def main():
             tot = sum(c.values())
             shares = sorted(((k, v / tot) for k, v in c.items() if k), key=lambda t: -t[1])
             pstr = "|".join(f"{k}:{s:.2f}" for k, s in shares if s >= 0.05)
+            xs = [p[0] for ring in g for p in ring]
+            ys = [p[1] for ring in g for p in ring]
+            blds = []
+            for i in range(int(min(xs) // CELL), int(max(xs) // CELL) + 1):
+                for j in range(int(min(ys) // CELL), int(max(ys) // CELL) + 1):
+                    for k in bgrid.get((i, j), ()):
+                        cid, cx, cy = bcent[k]
+                        if min(xs) <= cx <= max(xs) and min(ys) <= cy <= max(ys) and pip(cx, cy, g):
+                            blds.append(cid)
             region = ",".join(x.strip().strip('"') for x in r["REGIONNAME"].split(","))
-            w.writerow([region, r["QUARTER"], r["UPI"], r["N_PLACEID"], r["REGPURPOSE"], pstr])
+            w.writerow([r["PRIMKEY"], region, r["QUARTER"], r["UPI"], r["N_PLACEID"], r["REGPURPOSE"], pstr,
+                        "|".join(sorted(blds))])
             n += 1
             with_p += bool(pstr)
             if n % 20000 == 0:
